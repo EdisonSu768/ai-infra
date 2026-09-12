@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="大模型系统与性能优化学习路线、实验方法和实践项目。">
-  <title>大模型系统与性能优化学习路线</title>
+  <meta name="description" content="面向 Ascend NPU 与 CANN 的大模型系统和性能优化学习路线。">
+  <title>Ascend NPU 大模型系统与性能优化学习路线</title>
   <style>
     :root {
       --ink: #17212b;
@@ -98,10 +98,10 @@
 <body>
   <header class="site-header">
     <div class="header-inner">
-      <p class="eyebrow">Learning path / systems &amp; performance</p>
-      <h1>大模型系统与性能优化</h1>
-      <p class="lede">从 Transformer 和 GPU 基础，走到推理引擎、分布式通信、性能剖析与可复现实验。目标不是记住术语，而是能定位瓶颈、验证假设并交付稳定服务。</p>
-      <div class="header-meta"><span class="meta">建议周期：12–16 周</span><span class="meta">主线：推理系统</span><span class="meta">方式：理论 + 实验</span></div>
+      <p class="eyebrow">Learning path / Ascend NPU systems</p>
+      <h1>Ascend NPU 大模型系统与性能优化</h1>
+      <p class="lede">从 Transformer 和 NPU 执行模型，走到 CANN、推理引擎、HCCL、多卡通信与可复现实验。目标不是记住术语，而是能定位瓶颈、验证假设并交付稳定服务。</p>
+      <div class="header-meta"><span class="meta">建议周期：12–16 周</span><span class="meta">主线：Ascend 推理系统</span><span class="meta">方式：理论 + 实验</span></div>
     </div>
   </header>
 
@@ -109,6 +109,7 @@
     <nav class="toc" aria-label="页面目录">
       <p class="toc-title">目录</p>
       <a href="#principles">学习原则</a>
+      <a href="#ascend-stack">Ascend 技术栈</a>
       <a href="#roadmap">阶段路线</a>
       <a href="#metrics">指标速查</a>
       <a href="#practice">实践项目</a>
@@ -125,15 +126,25 @@
         </div>
       </section>
 
+      <section id="ascend-stack">
+        <h2>先认清 Ascend 技术栈</h2>
+        <div class="grid">
+          <article class="card teal"><span class="label">运行时层</span><h3>硬件与 CANN</h3><p>Ascend NPU、AI Core、HBM、片间互联、驱动与固件构成底座。CANN 提供运行时、算子库、图编译和调试工具；版本必须与 NPU 型号、镜像和框架匹配。</p></article>
+          <article class="card amber"><span class="label">框架层</span><h3>PyTorch 与 torch_npu</h3><p>理解设备放置、算子 fallback、动态图与图模式、混合精度和内存分配。遇到异常时先确认算子是否落在 NPU，避免把 CPU fallback 当成 NPU 性能。</p></article>
+          <article class="card coral"><span class="label">服务层</span><h3>vLLM-Ascend + KServe LLMISVC</h3><p>掌握模型支持矩阵、镜像和 checkpoint 的对应关系，理解如何通过 KServe 的 LLMInferenceService（LLMISVC）配置 vLLM-Ascend、资源、并行和服务参数。</p></article>
+          <article class="card teal"><span class="label">通信与观测</span><h3>HCCL 与 NPU Profiling</h3><p>多卡通信使用 HCCL；采集优先使用 torch_npu.profiler、CANN/msprof 或 MindStudio，记录 NPU kernel、HCCL、内存和算子时间。</p></article>
+        </div>
+      </section>
+
       <section id="roadmap">
         <h2>阶段学习路线</h2>
         <div class="roadmap">
           <article class="phase"><div class="phase-number">01<span>第 1–2 周</span></div><div><h3>编程、数学与系统基础</h3><ul><li>Python、Linux、Shell、Git；补齐 C/C++ 的内存、线程、锁和异步执行。</li><li>掌握线性代数、概率统计、微积分的必要部分，以及操作系统、网络、数据结构。</li><li>理解进程、线程、NUMA、I/O、复杂度和基本并发模型。</li></ul></div></article>
           <article class="phase"><div class="phase-number">02<span>第 3–4 周</span></div><div><h3>深度学习与 Transformer</h3><ul><li>能解释 Attention、MHA、GQA、RoPE、RMSNorm、MoE 和 Transformer 训练流程。</li><li>理解 Prefill、Decode、KV Cache，以及参数、激活、序列长度和 batch 对显存的影响。</li><li>手写一个小型 Transformer，用 PyTorch 跑通训练或推理。</li></ul></div></article>
-          <article class="phase"><div class="phase-number">03<span>第 5–6 周</span></div><div><h3>GPU、CUDA 与硬件瓶颈</h3><ul><li>学习 SM、Tensor Core、显存层级、带宽、FLOPs、算术强度和 Roofline。</li><li>理解 kernel、thread block、shared memory、stream、event 和同步。</li><li>认识 PCIe、NVLink、RDMA、CPU/NUMA、存储对服务的影响；按实际环境补充 CUDA、CANN 等平台知识。</li></ul></div></article>
-          <article class="phase"><div class="phase-number">04<span>第 7–9 周</span></div><div><h3>推理引擎与服务调度</h3><ul><li>深入 Prefill、Decode、Chunked Prefill、Continuous Batching、PagedAttention。</li><li>掌握 Prefix Cache、量化（BF16、FP8、INT8、INT4）和 Speculative Decoding 的适用条件。</li><li>运行并阅读 vLLM、SGLang 或 TensorRT-LLM，观察请求队列、KV Cache 和 batch 调度。</li></ul></div></article>
-          <article class="phase"><div class="phase-number">05<span>第 10–11 周</span></div><div><h3>分布式执行</h3><ul><li>理解 TP、PP、DP、EP 的通信量、显存代价、适用场景和扩展边界。</li><li>学习 NCCL、AllReduce、AllGather、All-to-All、通信拓扑，以及通信计算重叠。</li><li>了解 checkpoint、容错、滚动升级、Kubernetes、GPU 调度和服务路由。</li></ul></div></article>
-          <article class="phase"><div class="phase-number">06<span>第 12–16 周</span></div><div><h3>Profiling、压测与容量规划</h3><ul><li>使用 Nsight Systems、Nsight Compute、PyTorch Profiler、nvidia-smi 定位瓶颈。</li><li>设计固定 workload 的 A/B 实验，观察 P50、P95、P99、错误率和结果稳定性。</li><li>从绝对 SLO 出发确定容量，分别报告计算、显存、通信、排队和调度因素。</li></ul></div></article>
+          <article class="phase"><div class="phase-number">03<span>第 5–6 周</span></div><div><h3>Ascend NPU、CANN 与算子执行</h3><ul><li>学习 AI Core、HBM、片间互联、带宽、算力、算术强度和 Roofline。</li><li>掌握 CANN Runtime、算子库、图模式、混合精度、内存分配和算子 fallback。</li><li>用 torch_npu 跑通基础算子，确认设备放置、精度和 CANN/驱动/固件版本匹配。</li></ul></div></article>
+          <article class="phase"><div class="phase-number">04<span>第 7–9 周</span></div><div><h3>vLLM-Ascend 推理与 LLMISVC 调度</h3><ul><li>深入 Prefill、Decode、Chunked Prefill、Continuous Batching、PagedAttention 和 KV Cache。</li><li>掌握 Ascend 支持的量化路径（BF16、FP16、FP8/INT8 等以具体版本为准）和 Speculative Decoding。</li><li>通过 KServe LLMInferenceService 部署 vLLM-Ascend，观察请求队列、NPU 内存、KV Cache 和 batch 调度。</li></ul></div></article>
+          <article class="phase"><div class="phase-number">05<span>第 10–11 周</span></div><div><h3>HCCL 与 LLMISVC 分布式执行</h3><ul><li>理解 TP、PP、DP、EP 的通信量、显存代价、适用场景和扩展边界。</li><li>学习 HCCL 的 AllReduce、AllGather、All-to-All、通信拓扑和通信计算重叠。</li><li>了解 LLMISVC 的副本、资源、并行参数如何落到 Pod，及其与 Kubernetes 调度、服务路由的关系。</li></ul></div></article>
+          <article class="phase"><div class="phase-number">06<span>第 12–16 周</span></div><div><h3>NPU Profiling、LLMISVC 验收与容量规划</h3><ul><li>使用 torch_npu.profiler、CANN/msprof、MindStudio 和 NPU 监控工具定位瓶颈。</li><li>设计固定 workload 的 A/B 实验，观察 P50、P95、P99、错误率和结果稳定性。</li><li>通过 LLMISVC 就绪状态、端点请求、日志和 MaaS/压测流量验证服务，再从绝对 SLO 确定容量。</li></ul></div></article>
         </div>
       </section>
 
@@ -145,17 +156,18 @@
           <div class="metric"><strong>吞吐量</strong><span>tokens/s 或 requests/s，必须注明输入输出 token 口径。</span></div>
           <div class="metric"><strong>并发度</strong><span>同时处理的请求数；高并发不等于满足用户 SLO。</span></div>
           <div class="metric"><strong>P95 / P99</strong><span>尾延迟比平均值更能暴露排队、抖动和资源争用。</span></div>
-          <div class="metric"><strong>扩展效率</strong><span>增加 GPU 后的实际收益，需结合通信开销和稳定性判断。</span></div>
+          <div class="metric"><strong>NPU / HBM</strong><span>观察 NPU 利用率、AI Core、HBM 带宽和显存占用，识别计算与内存瓶颈。</span></div>
+          <div class="metric"><strong>HCCL 时间</strong><span>记录集合通信耗时、链路利用率和通信计算重叠，判断多卡扩展是否有效。</span></div>
         </div>
       </section>
 
       <section id="practice">
         <h2>实践项目</h2>
         <div class="project-list">
-          <article class="project"><h3><strong>项目 1</strong>：单卡推理基线</h3><ul><li>部署一个 7B 左右模型，固定 prompt、输出长度和并发档位。</li><li>记录 TTFT、ITL、吞吐、P95、错误率、显存和 GPU 利用率。</li><li>比较 batch size、上下文长度和 BF16/量化的变化。</li></ul></article>
-          <article class="project"><h3><strong>项目 2</strong>：KV Cache 与调度观察</h3><ul><li>改变上下文长度和并发度，画出显存、TTFT、ITL、吞吐曲线。</li><li>阅读 vLLM 或 SGLang 的 KV Cache、PagedAttention 和调度代码。</li><li>标记饱和点、错误率上升点和排队时间突变点。</li></ul></article>
-          <article class="project"><h3><strong>项目 3</strong>：多卡并行 A/B</h3><ul><li>在相同 workload 下比较 TP、DP，模型适配时再评估 EP/PP。</li><li>采集通信时间、链路带宽、显存和扩展效率，不只比较 tokens/s。</li><li>输出硬件拓扑、软件版本、配置和原始日志，保证结果可复现。</li></ul></article>
-          <article class="project"><h3><strong>项目 4</strong>：端到端服务化</h3><ul><li>在 Kubernetes 上部署推理服务，接入监控、限流、健康检查和故障恢复。</li><li>用真实请求分布压测，分别验证稳定性门槛和容量 SLO。</li><li>形成一份包含假设、配置、指标、图表、结论和限制的性能报告。</li></ul></article>
+          <article class="project"><h3><strong>项目 1</strong>：Ascend 单卡推理基线</h3><ul><li>在目标 Ascend 型号上部署一个 7B 左右模型，固定 prompt、输出长度和并发档位。</li><li>记录 TTFT、ITL、吞吐、P95、错误率、HBM 和 NPU 利用率，并核对 CANN/torch_npu 版本。</li><li>比较 batch size、上下文长度和 BF16/已验证量化路径的变化。</li></ul></article>
+          <article class="project"><h3><strong>项目 2</strong>：NPU KV Cache 与算子观察</h3><ul><li>改变上下文长度和并发度，画出 HBM、TTFT、ITL、吞吐曲线。</li><li>阅读 vLLM-Ascend 的 KV Cache、PagedAttention 和调度代码。</li><li>用 torch_npu.profiler 或 MindStudio 标出 NPU kernel、算子 fallback 和排队突变点。</li></ul></article>
+          <article class="project"><h3><strong>项目 3</strong>：HCCL 多卡并行 A/B</h3><ul><li>在相同 workload 下比较 TP、DP，模型适配时再评估 EP/PP。</li><li>采集 HCCL 通信时间、链路利用率、HBM、NPU 利用率和扩展效率，不只比较 tokens/s。</li><li>输出 NPU 拓扑、镜像、CANN/驱动版本、配置和原始日志，保证结果可复现。</li></ul></article>
+          <article class="project"><h3><strong>项目 4</strong>：KServe LLMISVC 端到端服务化</h3><ul><li>编写并部署 LLMInferenceService，让 KServe 创建 vLLM-Ascend 工作负载，配置模型、镜像、NPU 资源、并行和服务参数。</li><li>验证 CR 状态、Pod/容器日志、就绪探针、服务端点和 MaaS/压测请求，再接入 NPU 监控、限流和故障恢复。</li><li>形成包含硬件、镜像、模型、CANN、LLMISVC YAML、指标、图表、结论和限制的性能报告。</li></ul></article>
         </div>
       </section>
 
@@ -164,12 +176,15 @@
         <div class="card">
           <ul class="resources">
             <li><a href="https://arxiv.org/abs/1706.03762">Transformer 原论文</a></li>
-            <li><a href="https://docs.nvidia.com/cuda/cuda-c-programming-guide/">CUDA Programming Guide</a></li>
-            <li><a href="https://docs.nvidia.com/deeplearning/performance/dl-performance-gpu-background/index.html">GPU Performance Background</a></li>
-            <li><a href="https://github.com/vllm-project/vllm">vLLM 源码与文档</a></li>
-            <li><a href="https://github.com/sgl-project/sglang">SGLang 源码与文档</a></li>
-            <li><a href="https://docs.nvidia.com/deeplearning/tensorrt/quick-start-guide/index.html">TensorRT-LLM 入口</a></li>
-            <li><a href="https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/">NCCL User Guide</a></li>
+            <li><a href="https://www.hiascend.com/document">昇腾文档中心（CANN / 开发工具）</a></li>
+            <li><a href="https://www.hiascend.com/developer/activities/cann20262">CANN 软件与版本信息</a></li>
+            <li><a href="https://github.com/vllm-project/vllm-ascend">vLLM-Ascend 源码与文档</a></li>
+            <li><a href="https://kserve.github.io/website/docs/getting-started/genai-first-llmisvc">KServe LLMInferenceService 快速入门</a></li>
+            <li><a href="https://kserve.github.io/website/docs/model-serving/generative-inference/overview">KServe 生成式推理概览</a></li>
+            <li><a href="https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/80RC3alpha002/maintenref/troubleshooting/troubleshooting_0157.html">CANN Profiling / msprof 入口</a></li>
+            <li><a href="https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/80RC3alpha002/maintenref/hccl/hccl_0001.html">HCCL 文档入口</a></li>
+            <li><a href="https://github.com/Ascend/pytorch">torch_npu 源码</a></li>
+            <li><a href="https://arxiv.org/abs/1706.03762">Transformer 原论文</a></li>
             <li><a href="https://www.kernel.org/doc/html/latest/">Linux Kernel Documentation</a></li>
           </ul>
         </div>
@@ -180,9 +195,10 @@
         <h2>完成检查</h2>
         <div class="card checklist" aria-label="学习进度清单">
           <label class="check-item"><input type="checkbox" data-key="transformer"><span>我能手写并解释 Attention、KV Cache 和 Prefill/Decode。</span></label>
-          <label class="check-item"><input type="checkbox" data-key="gpu"><span>我能用 GPU 指标判断计算、显存带宽或通信是否成为瓶颈。</span></label>
-          <label class="check-item"><input type="checkbox" data-key="engine"><span>我能部署一个推理引擎，并解释 batch 和调度行为。</span></label>
-          <label class="check-item"><input type="checkbox" data-key="profile"><span>我能用 profiler 找到一个真实瓶颈，并完成优化前后复测。</span></label>
+          <label class="check-item"><input type="checkbox" data-key="ascend"><span>我能说明 Ascend NPU、CANN、torch_npu、HCCL 和推理引擎各自负责什么。</span></label>
+          <label class="check-item"><input type="checkbox" data-key="npu"><span>我能用 NPU、HBM 和 HCCL 指标判断计算、内存或通信是否成为瓶颈。</span></label>
+          <label class="check-item"><input type="checkbox" data-key="engine"><span>我能通过 KServe LLMInferenceService 部署 vLLM-Ascend，并解释 batch、KV Cache 和调度行为。</span></label>
+          <label class="check-item"><input type="checkbox" data-key="profile"><span>我能用 torch_npu.profiler、msprof 或 MindStudio 找到一个真实瓶颈，并完成优化前后复测。</span></label>
           <label class="check-item"><input type="checkbox" data-key="report"><span>我能写出带 workload、配置、原始数据和限制条件的性能报告。</span></label>
         </div>
       </section>
