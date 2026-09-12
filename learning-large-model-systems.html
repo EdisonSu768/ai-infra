@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="大模型系统与性能优化学习路线、实验方法和实践项目。">
+  <title>大模型系统与性能优化学习路线</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5f6d78;
+      --line: #d9e1e5;
+      --paper: #f7faf9;
+      --white: #ffffff;
+      --navy: #17324d;
+      --teal: #087f78;
+      --teal-soft: #e3f3f0;
+      --amber: #bd6b13;
+      --amber-soft: #fff1dc;
+      --coral: #a7463d;
+      --coral-soft: #fae8e5;
+      --shadow: 0 12px 30px rgba(23, 50, 77, .08);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--teal); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+    a:hover { color: var(--coral); }
+    .site-header { background: var(--navy); color: var(--white); }
+    .header-inner { max-width: 1180px; margin: auto; padding: 54px 28px 48px; }
+    .eyebrow { margin: 0 0 12px; color: #9bd8cf; font-size: .78rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { max-width: 780px; margin: 0; font-size: clamp(2.1rem, 5vw, 4.25rem); line-height: 1.08; letter-spacing: 0; }
+    .lede { max-width: 720px; margin: 20px 0 0; color: #d8e7ed; font-size: 1.12rem; }
+    .header-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+    .meta { padding: 5px 11px; border: 1px solid rgba(255,255,255,.25); border-radius: 5px; color: #eef8f7; font-size: .88rem; }
+    .layout { display: grid; grid-template-columns: 245px minmax(0, 1fr); gap: 42px; max-width: 1180px; margin: 0 auto; padding: 34px 28px 70px; }
+    .toc { position: sticky; top: 20px; align-self: start; }
+    .toc-title { margin: 0 0 10px; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .toc a { display: block; padding: 6px 10px; border-left: 2px solid transparent; color: var(--muted); text-decoration: none; font-size: .93rem; }
+    .toc a:hover { border-left-color: var(--teal); background: var(--teal-soft); color: var(--ink); }
+    main { min-width: 0; }
+    section { margin-bottom: 52px; scroll-margin-top: 20px; }
+    h2 { margin: 0 0 17px; color: var(--navy); font-size: 1.8rem; line-height: 1.2; letter-spacing: 0; }
+    h3 { margin: 0 0 8px; font-size: 1.08rem; line-height: 1.35; }
+    p { margin: 0 0 12px; }
+    .intro { border-left: 4px solid var(--teal); padding: 17px 20px; background: var(--white); box-shadow: var(--shadow); }
+    .roadmap { display: grid; gap: 12px; }
+    .phase { display: grid; grid-template-columns: 82px 1fr; gap: 18px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 7px; background: var(--white); }
+    .phase-number { color: var(--teal); font-size: 1.7rem; font-weight: 800; line-height: 1; }
+    .phase-number span { display: block; margin-top: 5px; color: var(--muted); font-size: .72rem; font-weight: 600; }
+    .phase ul, .project ul { margin: 8px 0 0; padding-left: 20px; }
+    .phase li, .project li { margin: 3px 0; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { padding: 20px; border: 1px solid var(--line); border-radius: 7px; background: var(--white); }
+    .card.teal { border-top: 4px solid var(--teal); }
+    .card.amber { border-top: 4px solid var(--amber); }
+    .card.coral { border-top: 4px solid var(--coral); }
+    .label { display: inline-block; margin-bottom: 9px; padding: 2px 8px; border-radius: 4px; background: var(--teal-soft); color: var(--teal); font-size: .76rem; font-weight: 700; }
+    .amber .label { background: var(--amber-soft); color: var(--amber); }
+    .coral .label { background: var(--coral-soft); color: var(--coral); }
+    .checklist { display: grid; gap: 8px; }
+    .check-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    .check-item:last-child { border-bottom: 0; }
+    .check-item input { width: 18px; height: 18px; margin-top: 4px; accent-color: var(--teal); flex: 0 0 auto; }
+    .check-item input:checked + span { color: var(--muted); text-decoration: line-through; }
+    .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .metric { padding: 15px; background: var(--navy); color: var(--white); border-radius: 6px; }
+    .metric strong { display: block; color: #9bd8cf; font-size: 1.05rem; }
+    .metric span { display: block; margin-top: 4px; color: #d8e7ed; font-size: .88rem; }
+    .experiment { padding: 19px 20px; border: 1px solid #e8d3b5; background: #fffaf2; }
+    .experiment ol { margin: 8px 0 0; padding-left: 21px; }
+    .project-list { display: grid; gap: 12px; }
+    .project { padding: 20px; border-left: 4px solid var(--coral); background: var(--white); box-shadow: var(--shadow); }
+    .project strong { color: var(--coral); }
+    .resources { columns: 2; column-gap: 34px; padding-left: 20px; }
+    .resources li { break-inside: avoid; margin: 8px 0; }
+    .note { padding: 15px 18px; border: 1px solid #b9d9d4; background: var(--teal-soft); }
+    footer { max-width: 1180px; margin: auto; padding: 0 28px 48px; color: var(--muted); font-size: .88rem; }
+    @media (max-width: 820px) {
+      .layout { display: block; padding-top: 24px; }
+      .toc { position: static; margin-bottom: 30px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+      .toc a { display: inline-block; margin: 2px 6px 2px 0; border: 1px solid var(--line); border-radius: 4px; }
+      .grid, .metrics { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 500px) {
+      .header-inner, .layout, footer { padding-left: 18px; padding-right: 18px; }
+      .header-inner { padding-top: 38px; padding-bottom: 34px; }
+      .phase { grid-template-columns: 55px 1fr; gap: 10px; padding: 15px; }
+      .resources { columns: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <p class="eyebrow">Learning path / systems &amp; performance</p>
+      <h1>大模型系统与性能优化</h1>
+      <p class="lede">从 Transformer 和 GPU 基础，走到推理引擎、分布式通信、性能剖析与可复现实验。目标不是记住术语，而是能定位瓶颈、验证假设并交付稳定服务。</p>
+      <div class="header-meta"><span class="meta">建议周期：12–16 周</span><span class="meta">主线：推理系统</span><span class="meta">方式：理论 + 实验</span></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="页面目录">
+      <p class="toc-title">目录</p>
+      <a href="#principles">学习原则</a>
+      <a href="#roadmap">阶段路线</a>
+      <a href="#metrics">指标速查</a>
+      <a href="#practice">实践项目</a>
+      <a href="#resources">资料入口</a>
+      <a href="#checklist">完成检查</a>
+    </nav>
+
+    <main>
+      <section id="principles">
+        <h2>先建立正确的学习方式</h2>
+        <div class="intro">
+          <p><strong>每次优化都遵循同一条链路：</strong>建立基线 → 固定变量 → 找到瓶颈 → 修改一个因素 → 复测延迟、吞吐、稳定性和成本。</p>
+          <p>性能结论必须绑定模型、硬件、输入输出长度、并发度、软件版本和服务目标。没有这些上下文，“某配置更快”通常不能迁移到另一套环境。</p>
+        </div>
+      </section>
+
+      <section id="roadmap">
+        <h2>阶段学习路线</h2>
+        <div class="roadmap">
+          <article class="phase"><div class="phase-number">01<span>第 1–2 周</span></div><div><h3>编程、数学与系统基础</h3><ul><li>Python、Linux、Shell、Git；补齐 C/C++ 的内存、线程、锁和异步执行。</li><li>掌握线性代数、概率统计、微积分的必要部分，以及操作系统、网络、数据结构。</li><li>理解进程、线程、NUMA、I/O、复杂度和基本并发模型。</li></ul></div></article>
+          <article class="phase"><div class="phase-number">02<span>第 3–4 周</span></div><div><h3>深度学习与 Transformer</h3><ul><li>能解释 Attention、MHA、GQA、RoPE、RMSNorm、MoE 和 Transformer 训练流程。</li><li>理解 Prefill、Decode、KV Cache，以及参数、激活、序列长度和 batch 对显存的影响。</li><li>手写一个小型 Transformer，用 PyTorch 跑通训练或推理。</li></ul></div></article>
+          <article class="phase"><div class="phase-number">03<span>第 5–6 周</span></div><div><h3>GPU、CUDA 与硬件瓶颈</h3><ul><li>学习 SM、Tensor Core、显存层级、带宽、FLOPs、算术强度和 Roofline。</li><li>理解 kernel、thread block、shared memory、stream、event 和同步。</li><li>认识 PCIe、NVLink、RDMA、CPU/NUMA、存储对服务的影响；按实际环境补充 CUDA、CANN 等平台知识。</li></ul></div></article>
+          <article class="phase"><div class="phase-number">04<span>第 7–9 周</span></div><div><h3>推理引擎与服务调度</h3><ul><li>深入 Prefill、Decode、Chunked Prefill、Continuous Batching、PagedAttention。</li><li>掌握 Prefix Cache、量化（BF16、FP8、INT8、INT4）和 Speculative Decoding 的适用条件。</li><li>运行并阅读 vLLM、SGLang 或 TensorRT-LLM，观察请求队列、KV Cache 和 batch 调度。</li></ul></div></article>
+          <article class="phase"><div class="phase-number">05<span>第 10–11 周</span></div><div><h3>分布式执行</h3><ul><li>理解 TP、PP、DP、EP 的通信量、显存代价、适用场景和扩展边界。</li><li>学习 NCCL、AllReduce、AllGather、All-to-All、通信拓扑，以及通信计算重叠。</li><li>了解 checkpoint、容错、滚动升级、Kubernetes、GPU 调度和服务路由。</li></ul></div></article>
+          <article class="phase"><div class="phase-number">06<span>第 12–16 周</span></div><div><h3>Profiling、压测与容量规划</h3><ul><li>使用 Nsight Systems、Nsight Compute、PyTorch Profiler、nvidia-smi 定位瓶颈。</li><li>设计固定 workload 的 A/B 实验，观察 P50、P95、P99、错误率和结果稳定性。</li><li>从绝对 SLO 出发确定容量，分别报告计算、显存、通信、排队和调度因素。</li></ul></div></article>
+        </div>
+      </section>
+
+      <section id="metrics">
+        <h2>性能指标速查</h2>
+        <div class="metrics">
+          <div class="metric"><strong>TTFT</strong><span>Time to First Token，首 token 延迟，常受排队和 Prefill 影响。</span></div>
+          <div class="metric"><strong>ITL / TPOT</strong><span>生成 token 间隔，反映 Decode 阶段的交互体验。</span></div>
+          <div class="metric"><strong>吞吐量</strong><span>tokens/s 或 requests/s，必须注明输入输出 token 口径。</span></div>
+          <div class="metric"><strong>并发度</strong><span>同时处理的请求数；高并发不等于满足用户 SLO。</span></div>
+          <div class="metric"><strong>P95 / P99</strong><span>尾延迟比平均值更能暴露排队、抖动和资源争用。</span></div>
+          <div class="metric"><strong>扩展效率</strong><span>增加 GPU 后的实际收益，需结合通信开销和稳定性判断。</span></div>
+        </div>
+      </section>
+
+      <section id="practice">
+        <h2>实践项目</h2>
+        <div class="project-list">
+          <article class="project"><h3><strong>项目 1</strong>：单卡推理基线</h3><ul><li>部署一个 7B 左右模型，固定 prompt、输出长度和并发档位。</li><li>记录 TTFT、ITL、吞吐、P95、错误率、显存和 GPU 利用率。</li><li>比较 batch size、上下文长度和 BF16/量化的变化。</li></ul></article>
+          <article class="project"><h3><strong>项目 2</strong>：KV Cache 与调度观察</h3><ul><li>改变上下文长度和并发度，画出显存、TTFT、ITL、吞吐曲线。</li><li>阅读 vLLM 或 SGLang 的 KV Cache、PagedAttention 和调度代码。</li><li>标记饱和点、错误率上升点和排队时间突变点。</li></ul></article>
+          <article class="project"><h3><strong>项目 3</strong>：多卡并行 A/B</h3><ul><li>在相同 workload 下比较 TP、DP，模型适配时再评估 EP/PP。</li><li>采集通信时间、链路带宽、显存和扩展效率，不只比较 tokens/s。</li><li>输出硬件拓扑、软件版本、配置和原始日志，保证结果可复现。</li></ul></article>
+          <article class="project"><h3><strong>项目 4</strong>：端到端服务化</h3><ul><li>在 Kubernetes 上部署推理服务，接入监控、限流、健康检查和故障恢复。</li><li>用真实请求分布压测，分别验证稳定性门槛和容量 SLO。</li><li>形成一份包含假设、配置、指标、图表、结论和限制的性能报告。</li></ul></article>
+        </div>
+      </section>
+
+      <section id="resources">
+        <h2>资料入口</h2>
+        <div class="card">
+          <ul class="resources">
+            <li><a href="https://arxiv.org/abs/1706.03762">Transformer 原论文</a></li>
+            <li><a href="https://docs.nvidia.com/cuda/cuda-c-programming-guide/">CUDA Programming Guide</a></li>
+            <li><a href="https://docs.nvidia.com/deeplearning/performance/dl-performance-gpu-background/index.html">GPU Performance Background</a></li>
+            <li><a href="https://github.com/vllm-project/vllm">vLLM 源码与文档</a></li>
+            <li><a href="https://github.com/sgl-project/sglang">SGLang 源码与文档</a></li>
+            <li><a href="https://docs.nvidia.com/deeplearning/tensorrt/quick-start-guide/index.html">TensorRT-LLM 入口</a></li>
+            <li><a href="https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/">NCCL User Guide</a></li>
+            <li><a href="https://www.kernel.org/doc/html/latest/">Linux Kernel Documentation</a></li>
+          </ul>
+        </div>
+        <div class="note"><strong>阅读方法：</strong>每读完一篇论文或一段源码，写下它解决的瓶颈、增加的开销、适用的 workload，以及如何用实验验证。</div>
+      </section>
+
+      <section id="checklist">
+        <h2>完成检查</h2>
+        <div class="card checklist" aria-label="学习进度清单">
+          <label class="check-item"><input type="checkbox" data-key="transformer"><span>我能手写并解释 Attention、KV Cache 和 Prefill/Decode。</span></label>
+          <label class="check-item"><input type="checkbox" data-key="gpu"><span>我能用 GPU 指标判断计算、显存带宽或通信是否成为瓶颈。</span></label>
+          <label class="check-item"><input type="checkbox" data-key="engine"><span>我能部署一个推理引擎，并解释 batch 和调度行为。</span></label>
+          <label class="check-item"><input type="checkbox" data-key="profile"><span>我能用 profiler 找到一个真实瓶颈，并完成优化前后复测。</span></label>
+          <label class="check-item"><input type="checkbox" data-key="report"><span>我能写出带 workload、配置、原始数据和限制条件的性能报告。</span></label>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer>本页为独立 HTML 文档，可直接离线打开。勾选进度仅保存在当前浏览器的本地存储中。</footer>
+  <script>
+    document.querySelectorAll('input[data-key]').forEach(function (box) {
+      var key = 'llm-learning-' + box.dataset.key;
+      box.checked = localStorage.getItem(key) === 'done';
+      box.addEventListener('change', function () {
+        localStorage.setItem(key, box.checked ? 'done' : 'todo');
+      });
+    });
+  </script>
+</body>
+</html>
