@@ -1,0 +1,2 @@
+- https://huggingface.co/datasets/Exgentic/agent-llm-traces-v2
+- local path: ~/Tmp/agent-llm-traces-v2
