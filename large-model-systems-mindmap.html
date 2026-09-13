@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Ascend NPU 大模型系统知识脑图，覆盖模型、算子、vLLM-Ascend、KServe LLMISVC 和性能优化。">
+  <title>Ascend NPU 大模型系统知识脑图</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #5f6d78;
+      --line: #cbd8dc;
+      --paper: #f4f8f7;
+      --white: #fff;
+      --navy: #17324d;
+      --teal: #087f78;
+      --teal-soft: #e3f3f0;
+      --blue: #245480;
+      --blue-soft: #e5edf8;
+      --amber: #bd6b13;
+      --amber-soft: #fff1dc;
+      --coral: #a7463d;
+      --coral-soft: #fae8e5;
+      --mainstream: #167c55;
+      --mainstream-soft: #e5f3eb;
+      --future: #66508f;
+      --future-soft: #f0ebf8;
+      --baseline: #68757d;
+      --baseline-soft: #edf1f2;
+      --gray-soft: #edf0f1;
+      --shadow: 0 10px 24px rgba(23, 50, 77, .08);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--paper); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    a { color: var(--teal); text-underline-offset: 3px; }
+    .header { background: var(--navy); color: var(--white); }
+    .header-inner { max-width: 1320px; margin: auto; padding: 38px 28px 32px; }
+    .eyebrow { margin: 0 0 8px; color: #9bd8cf; font-size: .76rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.7rem); line-height: 1.1; letter-spacing: 0; }
+    .lede { max-width: 850px; margin: 15px 0 0; color: #d8e7ed; font-size: 1.05rem; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 22px; }
+    button { border: 1px solid rgba(255,255,255,.35); border-radius: 5px; padding: 7px 12px; color: var(--white); background: transparent; font: inherit; cursor: pointer; }
+    button:hover, button:focus-visible { background: rgba(255,255,255,.14); outline: 2px solid #9bd8cf; outline-offset: 2px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
+    .status { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: .72rem; font-weight: 700; line-height: 1.6; white-space: nowrap; }
+    .core { color: var(--teal); background: var(--teal-soft); }
+    .trend { color: var(--blue); background: var(--blue-soft); }
+    .context { color: var(--amber); background: var(--amber-soft); }
+    .history { color: #65717a; background: var(--gray-soft); }
+    .ascend { color: var(--coral); background: var(--coral-soft); }
+    .trend-main { color: var(--mainstream); background: var(--mainstream-soft); }
+    .trend-future { color: var(--future); background: var(--future-soft); }
+    .trend-baseline { color: var(--baseline); background: var(--baseline-soft); }
+    main { max-width: 1320px; margin: auto; padding: 30px 28px 64px; }
+    .mindmap { position: relative; }
+    .root-wrap { display: flex; justify-content: center; position: relative; z-index: 2; }
+    .root { width: min(100%, 390px); padding: 20px 24px; border: 3px solid var(--navy); border-radius: 10px; background: var(--navy); color: var(--white); text-align: center; box-shadow: 0 16px 34px rgba(23, 50, 77, .2); }
+    .root h2 { margin: 0; color: #9bd8cf; font-size: 1.55rem; line-height: 1.2; }
+    .root p { margin: 7px 0 0; color: #d8e7ed; font-size: .9rem; }
+    .connector { height: 34px; width: 68%; margin: 0 auto; border-left: 2px solid var(--line); border-right: 2px solid var(--line); border-bottom: 2px solid var(--line); }
+    .branches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; position: relative; margin-top: -1px; }
+    .branches::before { content: ""; position: absolute; top: -1px; left: 16.7%; right: 16.7%; border-top: 2px solid var(--line); }
+    .branch { position: relative; min-width: 0; padding: 22px 16px 16px; border: 1px solid var(--line); border-top: 5px solid var(--teal); border-radius: 8px; background: var(--white); box-shadow: var(--shadow); }
+    .branch:nth-child(2), .branch:nth-child(5) { border-top-color: var(--amber); }
+    .branch:nth-child(3), .branch:nth-child(6) { border-top-color: var(--coral); }
+    .branch::before { content: ""; position: absolute; top: -23px; left: 50%; height: 22px; border-left: 2px solid var(--line); }
+    .branch h3 { margin: 0 0 3px; color: var(--navy); font-size: 1.15rem; line-height: 1.25; }
+    .branch > p { margin: 0 0 12px; color: var(--muted); font-size: .86rem; }
+    details { border-top: 1px solid #e4eaec; }
+    details:first-of-type { border-top: 0; }
+    details details { margin-left: 22px; border-left: 2px solid #e4eaec; padding-left: 10px; }
+    details details summary { font-size: .93rem; }
+    summary { display: flex; align-items: center; gap: 8px; padding: 10px 2px; color: var(--ink); font-weight: 700; cursor: pointer; list-style: none; }
+    summary:has(.status.core) { border-left: 3px solid var(--teal); padding-left: 8px; }
+    summary:has(.status.trend) { border-left: 3px solid var(--blue); padding-left: 8px; }
+    summary:has(.status.context) { border-left: 3px solid var(--amber); padding-left: 8px; }
+    summary:has(.status.history) { border-left: 3px solid #8b969c; padding-left: 8px; }
+    summary:has(.status.ascend) { border-left: 3px solid var(--coral); padding-left: 8px; }
+    summary:has(.status.trend-main) { border-left: 3px solid var(--mainstream); padding-left: 8px; }
+    summary:has(.status.trend-future) { border-left: 3px solid var(--future); padding-left: 8px; }
+    summary:has(.status.trend-baseline) { border-left: 3px solid var(--baseline); padding-left: 8px; }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "+"; display: inline-grid; place-items: center; width: 19px; height: 19px; border: 1px solid var(--line); border-radius: 4px; color: var(--teal); font-weight: 800; flex: 0 0 auto; }
+    details[open] > summary::before { content: "−"; }
+    .node-title { flex: 1; }
+    .definition { margin: 0 0 11px 27px; color: var(--muted); font-size: .88rem; }
+    .definition strong { color: var(--ink); }
+    .subnodes { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 12px 27px; }
+    .subnode { padding: 3px 7px; border: 1px solid var(--line); border-radius: 4px; color: var(--navy); background: #f8fbfb; font-size: .76rem; }
+    .layer-stack { display: grid; gap: 5px; margin: 0 0 14px 27px; padding: 10px; border: 1px solid var(--line); background: #f8fbfb; }
+    .layer-stack-caption { margin: 0 0 7px; color: var(--muted); font-size: .8rem; }
+    .layer-row { display: grid; grid-template-columns: 88px 1fr 1fr; gap: 7px; align-items: center; min-height: 30px; }
+    .layer-name, .layer-part { padding: 4px 7px; border: 1px solid var(--line); border-radius: 4px; font-size: .78rem; }
+    .layer-name { color: var(--navy); background: var(--blue-soft); font-weight: 700; }
+    .layer-part { color: var(--ink); background: var(--white); }
+    .layer-ellipsis { margin: 0; color: var(--muted); font-size: .85rem; text-align: center; }
+    .diagram { margin: 0 0 12px 27px; padding: 10px 12px; overflow-x: auto; border-left: 3px solid var(--blue); color: var(--navy); background: #f5f8fb; font: .78rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+    .questions { margin: 32px 0 0; padding: 18px 20px; border-left: 4px solid var(--teal); background: var(--white); box-shadow: var(--shadow); }
+    .questions h2 { margin: 0 0 7px; color: var(--navy); font-size: 1.25rem; }
+    .questions p { margin: 0; color: var(--muted); }
+    .footer { max-width: 1320px; margin: auto; padding: 0 28px 35px; color: var(--muted); font-size: .86rem; }
+    @media (max-width: 980px) { .branches { grid-template-columns: repeat(2, minmax(0, 1fr)); } .branches::before { left: 25%; right: 25%; } }
+    @media (max-width: 620px) { .header-inner, main, .footer { padding-left: 17px; padding-right: 17px; } .branches { grid-template-columns: 1fr; } .branches::before { display: none; } .branch::before { display: none; } .connector { display: none; } .root-wrap { margin-bottom: 16px; } .branch { padding-top: 18px; } .root { padding: 17px 18px; } .layer-row { grid-template-columns: 68px 1fr 1fr; } .layer-part { overflow-wrap: anywhere; } }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <p class="eyebrow">Mind map / Ascend NPU systems</p>
+      <h1>大模型系统与性能优化</h1>
+      <p class="lede">以一次在线请求为主线，把模型结构、算子、NPU 执行、vLLM-Ascend、KServe LLMInferenceService、通信和性能证据串成一张图。</p>
+      <div class="toolbar"><button type="button" id="expand" title="展开全部知识节点">展开全部</button><button type="button" id="collapse" title="折叠全部知识节点">折叠全部</button><a href="llm-systems-conversation-summary.html" style="align-self:center;margin-left:4px;color:#9bd8cf">打开并行速查</a></div>
+      <div class="legend" aria-label="状态图例"><span class="status core">核心基础</span><span class="status trend">当前主流</span><span class="status context">按场景</span><span class="status history">历史/了解即可</span><span class="status ascend">Ascend 专项</span><span class="status trend-main">主流路线</span><span class="status trend-future">前沿/未来</span><span class="status trend-baseline">经典基线</span></div>
+    </div>
+  </header>
+
+  <main>
+    <div class="mindmap">
+      <div class="root-wrap"><div class="root"><h2>大模型在线推理</h2><p>输入 token → Transformer → NPU 执行 → 流式输出</p></div></div>
+      <div class="connector" aria-hidden="true"></div>
+      <div class="branches">
+        <section class="branch"><h3>一、模型结构</h3><p>模型为什么这样组织计算？</p>
+          <details open><summary><span class="node-title">Transformer Layer 堆叠</span><span class="status core">核心基础</span></summary><p class="definition"><strong>解决：</strong>把同一层内的 Attention 和 FFN 重复堆叠，逐层变换 token 表示；实际层数以模型 checkpoint 为准。</p><div class="layer-stack" aria-label="以 32 层模型为例的 Transformer Layer 堆叠"><p class="layer-stack-caption">以 32 层模型为例：每一层都包含 Attention 和 FFN。</p><div class="layer-row"><span class="layer-name">Layer 1</span><span class="layer-part">Attention</span><span class="layer-part">FFN</span></div><div class="layer-row"><span class="layer-name">Layer 2</span><span class="layer-part">Attention</span><span class="layer-part">FFN</span></div><div class="layer-row"><span class="layer-name">Layer 3</span><span class="layer-part">Attention</span><span class="layer-part">FFN</span></div><p class="layer-ellipsis">⋮</p><div class="layer-row"><span class="layer-name">Layer 32</span><span class="layer-part">Attention</span><span class="layer-part">FFN</span></div></div><div class="subnodes"><span class="subnode">Residual</span><span class="subnode">RMSNorm</span></div>
+            <details open><summary><span class="node-title">Attention</span><span class="status core">核心基础</span></summary><p class="definition"><strong>解决：</strong>让当前 token 读取上下文中相关 token 的信息。</p><pre class="diagram" aria-label="Attention 计算流程">Q, K, V
+  |   |
+  +-- QKᵀ -- Scale/Mask -- Softmax --+   V
+                                      |
+                              Attention × V
+                                      |
+                               Output Projection</pre><div class="subnodes"><span class="subnode">Q/K/V Projection</span><span class="subnode">QKᵀ</span><span class="subnode">Softmax</span><span class="subnode">Attention × V</span><span class="subnode">Output Projection</span></div>
+              <details open><summary><span class="node-title">Attention 变体：MHA / GQA / MLA</span><span class="status trend">结构趋势</span></summary><p class="definition"><strong>解决：</strong>在表达能力、KV Cache 大小和带宽之间取平衡。GQA 是当前常见的 KV 共享折中方案；MLA 已在部分前沿模型中落地，仍依赖模型与运行时支持；MHA 是成熟基线和兼容选项，并非被淘汰。</p><div class="subnodes"><span class="subnode trend-baseline">MHA：成熟基线 / 存量兼容</span><span class="subnode trend-main">GQA：当前主流折中</span><span class="subnode trend-future">MLA：前沿已落地</span></div></details>
+              <details><summary><span class="node-title">Attention 算子流程</span><span class="status core">计算分解</span></summary><p class="definition"><strong>解决：</strong>把注意力从模型概念映射到可执行计算；实际引擎可能融合成一个 Attention kernel。</p><div class="subnodes"><span class="subnode">MatMul(Q, Kᵀ)</span><span class="subnode">Scale / Mask</span><span class="subnode">Softmax</span><span class="subnode">MatMul(Attention, V)</span></div></details>
+            </details>
+            <details><summary><span class="node-title">FFN</span><span class="status core">核心基础</span></summary><p class="definition"><strong>解决：</strong>对每个 token 做非线性特征变换，扩大模型的表征能力。</p><pre class="diagram" aria-label="FFN 计算流程">hidden state x
+       |
+   +---+---+
+   |       |
+  Gate    Up Projection
+   |       |
+  SiLU     +
+   +---×---+
+       |
+  Down Projection
+       |
+    FFN output</pre><div class="subnodes"><span class="subnode">Up Projection</span><span class="subnode">Activation</span><span class="subnode">Down Projection</span></div>
+              <details><summary><span class="node-title">FFN 变体：Dense / SwiGLU / MoE</span><span class="status trend">当前主流</span></summary><p class="definition"><strong>解决：</strong>SwiGLU 用门控提升表达能力；MoE 只激活部分专家，降低每 token 计算量。</p><div class="subnodes"><span class="subnode">Gate/Up Projection</span><span class="subnode">SiLU</span><span class="subnode">Elementwise Multiply</span><span class="subnode">Router</span><span class="subnode">Top-K</span><span class="subnode">Expert FFN</span></div></details>
+            </details>
+          </details>
+          <details><summary><span class="node-title">RoPE 与长上下文</span><span class="status core">基础 + 按模型</span></summary><p class="definition"><strong>解决：</strong>给注意力注入位置信息，并通过 scaling 让模型处理更长上下文；实际能力取决于 checkpoint 和运行时限制。</p><div class="subnodes"><span class="subnode">位置编码</span><span class="subnode">YaRN / NTK scaling</span><span class="subnode">上下文上限</span></div></details>
+          <details><summary><span class="node-title">Tokenizer / Embedding / LM Head</span><span class="status core">核心基础</span></summary><p class="definition"><strong>解决：</strong>把文本变成 token，映射为向量，再把隐藏状态变回词表概率；token 口径也决定性能统计是否可信。</p><div class="subnodes"><span class="subnode">prompt_tokens</span><span class="subnode">completion_tokens</span><span class="subnode">Sampling</span></div></details>
+          <details><summary><span class="node-title">量化</span><span class="status trend">硬件相关主流</span></summary><p class="definition"><strong>解决：</strong>降低权重、激活或 KV 的存储和带宽成本，让模型适配更多 NPU 或提高并发；必须做精度回归。</p><div class="subnodes"><span class="subnode">BF16 / FP16</span><span class="subnode">FP8 / INT8 / INT4</span><span class="subnode">校准</span></div></details>
+        </section>
+
+        <section class="branch"><h3>二、推理运行时与请求调度</h3><p>一次请求如何变成 token？</p>
+          <details open><summary><span class="node-title">Prefill</span><span class="status core">核心基础</span></summary><p class="definition"><strong>解决：</strong>一次处理输入上下文并生成首 token，主要影响 TTFT；长 prompt 常形成计算峰值。</p><div class="subnodes"><span class="subnode">input length</span><span class="subnode">TTFT</span><span class="subnode">KV write</span></div></details>
+          <details open><summary><span class="node-title">Decode</span><span class="status core">核心基础</span></summary><p class="definition"><strong>解决：</strong>逐 token 生成输出，主要受 KV 读取、HBM 带宽和串行步数影响。</p><div class="subnodes"><span class="subnode">ITL / TPOT</span><span class="subnode">batch</span><span class="subnode">MTP</span></div></details>
+          <details><summary><span class="node-title">KV Cache</span><span class="status core">核心基础</span></summary><p class="definition"><strong>解决：</strong>避免每个新 token 重算历史 K/V；代价是占用 HBM，并需要高效分配、读写和回收。</p><pre class="diagram" aria-label="KV Cache 在 Prefill 和 Decode 中的作用">Prefill:  [t1 t2 t3 t4] --write--> KV Cache
+Decode:   [t5]       --read-----> KV Cache + [t5]
+          历史 K/V 复用，只计算新 token</pre><div class="subnodes"><span class="subnode">Cache Write</span><span class="subnode">Cache Read</span><span class="subnode">block table</span></div></details>
+          <details><summary><span class="node-title">PagedAttention / 分块缓存</span><span class="status trend">当前主流</span></summary><p class="definition"><strong>解决：</strong>按 block 管理 KV，减少连续大块分配造成的碎片，并支持动态请求；需要关注分配、回收和内存水位。</p><div class="subnodes"><span class="subnode">block table</span><span class="subnode">KV block</span><span class="subnode">内存碎片</span></div></details>
+          <details><summary><span class="node-title">Continuous Batching</span><span class="status trend">当前主流</span></summary><p class="definition"><strong>解决：</strong>按迭代加入和退出请求，避免静态 batch 被最慢请求拖住，提高在线服务利用率。</p><pre class="diagram" aria-label="Continuous Batching 迭代调度示意">iteration 1:  A  B  C
+iteration 2:  A  B  C  + D
+iteration 3:  A     C  + D  + E
+完成请求退出，新请求按迭代加入</pre><div class="subnodes"><span class="subnode">scheduler</span><span class="subnode">iteration</span><span class="subnode">queue</span></div></details>
+          <details><summary><span class="node-title">Prefix Cache</span><span class="status trend">当前主流</span></summary><p class="definition"><strong>解决：</strong>复用相同系统提示、长文档或会话前缀的 KV，减少重复 Prefill；收益取决于命中率和路由 locality。</p><div class="subnodes"><span class="subnode">cache hit</span><span class="subnode">cache key</span><span class="subnode">session locality</span></div></details>
+          <details><summary><span class="node-title">Chunked Prefill</span><span class="status trend">当前主流</span></summary><p class="definition"><strong>解决：</strong>把长 Prefill 切成片段，避免长请求独占设备并阻塞 Decode；需要平衡 TTFT、ITL 和调度优先级。</p><div class="subnodes"><span class="subnode">chunk size</span><span class="subnode">调度优先级</span><span class="subnode">尾延迟</span></div></details>
+        </section>
+
+        <section class="branch"><h3>三、Ascend NPU 与 CANN</h3><p>计算如何落到 NPU？</p>
+          <details open><summary><span class="node-title">Ascend NPU / AI Core / HBM</span><span class="status ascend">Ascend 专项</span></summary><p class="definition"><strong>解决：</strong>提供矩阵和向量计算，以及权重、激活和 KV 的高速存储；容量、带宽和片间互联共同决定可行性。</p><div class="subnodes"><span class="subnode">AI Core</span><span class="subnode">HBM 容量</span><span class="subnode">HBM 带宽</span><span class="subnode">片间互联</span></div></details>
+          <details open><summary><span class="node-title">MatMul / GEMM</span><span class="status core">核心基础</span></summary><p class="definition"><strong>解决：</strong>完成 Q/K/V、投影和 FFN 的主要矩阵计算；性能取决于 shape、精度、AI Core 利用率和访存。</p><div class="subnodes"><span class="subnode">FLOPs</span><span class="subnode">shape</span><span class="subnode">算术强度</span></div></details>
+          <details><summary><span class="node-title">Softmax / SiLU / Add</span><span class="status core">核心基础</span></summary><p class="definition"><strong>解决：</strong>完成归一化、激活和残差连接；单个算力不大，却可能受访存、融合和同步影响。</p><div class="subnodes"><span class="subnode">数值稳定</span><span class="subnode">elementwise</span><span class="subnode">fusion</span></div></details>
+          <details open><summary><span class="node-title">CANN Runtime</span><span class="status ascend">Ascend 专项</span></summary><p class="definition"><strong>解决：</strong>把框架调用转换为 NPU 可执行任务，提供运行时、算子库、内存和执行队列能力。</p><div class="subnodes"><span class="subnode">driver/firmware</span><span class="subnode">Stream</span><span class="subnode">同步</span></div></details>
+          <details><summary><span class="node-title">torch_npu</span><span class="status ascend">Ascend 专项</span></summary><p class="definition"><strong>解决：</strong>让 PyTorch 使用 Ascend 设备和算子；必须确认 dtype、设备放置和版本矩阵。</p><div class="subnodes"><span class="subnode">动态图</span><span class="subnode">图模式</span><span class="subnode">编译缓存</span></div></details>
+          <details open><summary><span class="node-title">vLLM-Ascend</span><span class="status trend">客户主线</span></summary><p class="definition"><strong>解决：</strong>把 vLLM 的调度、KV Cache 和批处理能力适配到 Ascend NPU；需核对镜像、模型和 CANN 支持矩阵。</p><div class="subnodes"><span class="subnode">engine args</span><span class="subnode">quantization</span><span class="subnode">TP/DP/EP</span></div></details>
+          <details><summary><span class="node-title">算子融合 / Fallback</span><span class="status context">诊断必学</span></summary><p class="definition"><strong>解决：</strong>融合减少 kernel 和访存开销；fallback 保证功能但可能退回 CPU，造成搬运和同步。</p><div class="subnodes"><span class="subnode">kernel trace</span><span class="subnode">CPU fallback</span><span class="subnode">精度回归</span></div></details>
+        </section>
+
+        <section class="branch"><h3>四、并行与通信</h3><p>模型如何跨多张 NPU？</p>
+          <details open><summary><span class="node-title">并行方式速览</span><span class="status core">概念总览</span></summary><pre class="diagram" aria-label="TP DP EP PP 并行方式示意">TP:  一层权重切片 -> [卡0][卡1][卡2][卡3] -> 合并结果
+DP:  [完整副本 0]   [完整副本 1]   <- 请求路由
+EP:  token -> Router -> [Expert 0] [Expert 1] [Expert 2]
+PP:  Layer 1..16 -> Stage 0 -> Stage 1 -> Layer 17..32</pre><p class="definition"><strong>记法：</strong>TP/PP 组成一个模型副本，DP 复制副本；EP 主要服务 MoE 专家分布。</p></details>
+          <details open><summary><span class="node-title">Tensor Parallel（TP）</span><span class="status trend">推理主流</span></summary><p class="definition"><strong>解决：</strong>把层内权重或矩阵切到多卡，解决单卡显存或计算不足；代价是层间通信。</p><div class="subnodes"><span class="subnode">切分维度</span><span class="subnode">head 可整除</span><span class="subnode">通信点</span></div></details>
+          <details><summary><span class="node-title">Data Parallel（DP）</span><span class="status trend">推理主流</span></summary><p class="definition"><strong>解决：</strong>复制模型到多个实例，承载更多独立请求；代价是权重和 KV 的重复占用。</p><div class="subnodes"><span class="subnode">副本</span><span class="subnode">路由</span><span class="subnode">session sticky</span></div></details>
+          <details><summary><span class="node-title">Expert Parallel（EP）</span><span class="status context">MoE 必需</span></summary><p class="definition"><strong>解决：</strong>把 MoE 专家分布到不同卡；瓶颈常来自 All-to-All 和 expert imbalance。</p><div class="subnodes"><span class="subnode">Router</span><span class="subnode">Token Dispatch</span><span class="subnode">负载均衡</span></div></details>
+          <details><summary><span class="node-title">MoE 通信</span><span class="status context">按模型/拓扑</span></summary><p class="definition"><strong>解决：</strong>把 token 发往对应专家并汇总结果；跨卡时会引入 HCCL All-to-All 和负载不均。</p><div class="subnodes"><span class="subnode">Token Dispatch</span><span class="subnode">All-to-All</span><span class="subnode">Expert imbalance</span><span class="subnode">Token Combine</span></div></details>
+          <details><summary><span class="node-title">Pipeline Parallel（PP）</span><span class="status context">超大模型</span></summary><p class="definition"><strong>解决：</strong>按层切分模型以降低单卡显存压力；代价是 pipeline bubble 和调度复杂度。</p><div class="subnodes"><span class="subnode">microbatch</span><span class="subnode">bubble</span><span class="subnode">层切分</span></div></details>
+          <details open><summary><span class="node-title">HCCL</span><span class="status ascend">Ascend 专项</span></summary><p class="definition"><strong>解决：</strong>在 Ascend 卡之间执行集合通信，让 TP/DP/EP 协同工作。</p><pre class="diagram" aria-label="HCCL 集合通信示意">AllReduce:  卡0 --+             +--> 卡0
+                   +-- HCCL ----+
+             卡1 --+             +--> 卡1
+All-to-All:  token 分片 -> 各卡交换 -> 对应专家</pre><div class="subnodes"><span class="subnode">AllReduce</span><span class="subnode">AllGather</span><span class="subnode">All-to-All</span><span class="subnode">拓扑</span></div></details>
+          <details><summary><span class="node-title">通信与计算重叠</span><span class="status trend">当前主流</span></summary><p class="definition"><strong>解决：</strong>在等待通信时执行可独立的计算，减少通信暴露在端到端关键路径上的时间；需要通过 trace 验证同步点。</p><div class="subnodes"><span class="subnode">Stream</span><span class="subnode">异步事件</span><span class="subnode">Trace 时间线</span></div></details>
+        </section>
+
+        <section class="branch"><h3>五、服务编排与交付</h3><p>如何把模型交付成服务？</p>
+          <details open><summary><span class="node-title">LLMInferenceService（LLMISVC）</span><span class="status trend">客户主线</span></summary><p class="definition"><strong>解决：</strong>用声明式资源描述生成式模型服务，让 KServe 管理工作负载和生命周期。</p><pre class="diagram" aria-label="LLMInferenceService 交付链路">LLMISVC CR
+   |  spec: model + runtime + resources
+   v
+Kubernetes Pod / vLLM-Ascend
+   |  readiness + logs
+   v
+Endpoint -> MaaS / 客户请求</pre><div class="subnodes"><span class="subnode">metadata</span><span class="subnode">spec</span><span class="subnode">runtime</span><span class="subnode">endpoint</span></div></details>
+          <details><summary><span class="node-title">NPU 资源与拓扑</span><span class="status ascend">Ascend 专项</span></summary><p class="definition"><strong>解决：</strong>把每 Pod 的 NPU 数量、节点选择和并行布局交给 Kubernetes 正确调度。</p><div class="subnodes"><span class="subnode">requests/limits</span><span class="subnode">node label</span><span class="subnode">rank</span></div></details>
+          <details><summary><span class="node-title">Prefill/Decode 分离（PD）</span><span class="status context">复杂场景主流</span></summary><p class="definition"><strong>解决：</strong>把上下文计算和 token 生成放入不同资源池，分别扩容和调优；收益取决于 KV transfer、路由和会话粘性。</p><div class="subnodes"><span class="subnode">KV transfer</span><span class="subnode">路由</span><span class="subnode">负载均衡</span></div></details>
+          <details><summary><span class="node-title">生命周期与就绪</span><span class="status core">上线必学</span></summary><p class="definition"><strong>解决：</strong>确认模型加载完成、readiness 可靠、滚动更新和异常重启不会把流量导入坏 Pod。</p><div class="subnodes"><span class="subnode">CR status</span><span class="subnode">Pod logs</span><span class="subnode">probe</span><span class="subnode">events</span></div></details>
+          <details><summary><span class="node-title">端点 / MaaS / 压测</span><span class="status trend">交付必学</span></summary><p class="definition"><strong>解决：</strong>从真实访问入口验证服务，而不是只看 Pod Running；同时校验 token usage、超时和错误率。</p><div class="subnodes"><span class="subnode">streaming</span><span class="subnode">认证</span><span class="subnode">SLO</span></div></details>
+        </section>
+
+        <section class="branch"><h3>六、观测、指标与实验</h3><p>怎样证明优化真的有效？</p>
+          <details open><summary><span class="node-title">TTFT / ITL / P95/P99</span><span class="status core">核心指标</span></summary><p class="definition"><strong>解决：</strong>分别描述首 token、生成间隔和尾延迟；比单看平均值更接近用户体验。</p><pre class="diagram" aria-label="在线请求延迟指标对应关系">请求 -> 排队 -> Prefill -> 首 token -> Decode 循环 -> 流式输出
+          |              |              |
+        queue          TTFT          ITL / TPOT
+整体请求分布再看 P95 / P99，定位尾部抖动</pre><div class="subnodes"><span class="subnode">排队</span><span class="subnode">Prefill</span><span class="subnode">Decode</span></div></details>
+          <details><summary><span class="node-title">NPU / HBM / HCCL Trace</span><span class="status ascend">Ascend 专项</span></summary><p class="definition"><strong>解决：</strong>把端到端慢点映射到 NPU kernel、HBM、算子 fallback 或集合通信。</p><div class="subnodes"><span class="subnode">torch_npu.profiler</span><span class="subnode">msprof</span><span class="subnode">MindStudio</span></div></details>
+          <details><summary><span class="node-title">固定 Workload A/B</span><span class="status core">核心方法</span></summary><p class="definition"><strong>解决：</strong>隔离一个变量，固定模型、硬件、镜像、CANN、输入输出长度、并发和 LLMISVC 配置。</p><div class="subnodes"><span class="subnode">baseline</span><span class="subnode">warmup</span><span class="subnode">steady state</span></div></details>
+          <details><summary><span class="node-title">容量与绝对 SLO</span><span class="status trend">当前主流</span></summary><p class="definition"><strong>解决：</strong>回答在 TTFT、ITL、错误率门槛下能承载多少并发；容量不能由一次跑分或相对拐点替代。</p><div class="subnodes"><span class="subnode">concurrency</span><span class="subnode">queue</span><span class="subnode">error rate</span></div></details>
+          <details><summary><span class="node-title">静态显存估算</span><span class="status history">不能替代实测</span></summary><p class="definition"><strong>解决：</strong>用于早期可行性筛选，但不能证明 runtime 启动、KV 水位、HCCL 或真实 SLO。</p><div class="subnodes"><span class="subnode">权重</span><span class="subnode">KV estimate</span><span class="subnode">runtime reserve</span></div></details>
+        </section>
+
+        <section class="branch"><h3>七、趋势与取舍</h3><p>哪些值得重点学，哪些只需理解？</p>
+          <details open><summary><span class="node-title">MoE / GQA / MLA / 量化</span><span class="status trend">继续投入</span></summary><p class="definition"><strong>原因：</strong>它们直接改变每 token 计算量、KV Cache 或权重带宽，是主流模型和高并发推理的重要方向。</p><div class="subnodes"><span class="subnode">checkpoint 结构</span><span class="subnode">硬件支持</span><span class="subnode">精度回归</span></div></details>
+          <details><summary><span class="node-title">Prefix Cache / Chunked Prefill</span><span class="status trend">继续投入</span></summary><p class="definition"><strong>原因：</strong>它们直接影响长上下文服务的 Prefill 成本、TTFT、KV 命中率和 Decode 稳定性。</p><div class="subnodes"><span class="subnode">cache locality</span><span class="subnode">chunk size</span><span class="subnode">尾延迟</span></div></details>
+          <details><summary><span class="node-title">MTP / Speculative / PD</span><span class="status context">按场景验证</span></summary><p class="definition"><strong>原因：</strong>可能减少 Decode 串行步数或隔离 Prefill/Decode，但依赖模型头、KV transfer、路由和引擎能力。</p><div class="subnodes"><span class="subnode">接受率</span><span class="subnode">额外显存</span><span class="subnode">会话粘性</span></div></details>
+          <details><summary><span class="node-title">静态 batching</span><span class="status history">历史/了解即可</span></summary><p class="definition"><strong>原因：</strong>适合教学和离线任务，但在线服务容易被 padding、空槽和最慢请求拖累。</p><div class="subnodes"><span class="subnode">padding</span><span class="subnode">slowest request</span></div></details>
+          <details><summary><span class="node-title">CUDA-only 工具 / 只看平均吞吐</span><span class="status history">避免默认</span></summary><p class="definition"><strong>原因：</strong>可帮助理解通用原理，却不能代替 CANN/NPU trace、HCCL 证据、尾延迟和稳定性验证。</p><div class="subnodes"><span class="subnode">NPU backend</span><span class="subnode">P95/P99</span><span class="subnode">错误率</span></div></details>
+        </section>
+      </div>
+    </div>
+
+    <div class="questions"><h2>沿着脑图继续追问</h2><p>每个节点都可以继续问：它解决什么问题？消耗什么资源？Prefill 和 Decode 有什么不同？在 vLLM-Ascend 中如何实现？如何用 CANN/NPU profiling 证明它是瓶颈？</p></div>
+  </main>
+  <footer>本页是总览脑图；需要概念定义、资料链接和实践细节时，可打开上方的详细知识地图。</footer>
+  <script>
+    var nodes = Array.from(document.querySelectorAll('details'));
+    document.getElementById('expand').addEventListener('click', function () { nodes.forEach(function (node) { node.open = true; }); });
+    document.getElementById('collapse').addEventListener('click', function () { nodes.forEach(function (node) { node.open = false; }); });
+  </script>
+</body>
+</html>
