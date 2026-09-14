@@ -1,0 +1,299 @@
+# GLM-5.3-w8a8c8 · Atlas 800I/T A2 · Prefill/Decode 分离 · KServe LLMInferenceService
+#
+# 拓扑（共 8 台 A2，每台 8 × 64GB）：
+#   prefill  4 节点  DP4 × TP8  （dataLocal=1，每节点 1 个 DP rank 占满 8 卡）
+#   decode   4 节点  DP8 × TP4  （dataLocal=2，每节点 2 个 DP rank，各占 4 卡）
+#   KV 通路  MooncakeConnectorV1（kv_producer → kv_consumer）
+#
+# KServe 按 `parallelism.data / parallelism.dataLocal` 算出 LeaderWorkerSet 的 size
+# （= 节点数）：leader 起 API server，worker 带 --headless，
+# --data-parallel-start-rank 由 LWS_WORKER_INDEX × dataLocal 推出，
+# 与 vllm-ascend 文档里多机 DP 的手工脚本是同一套语义。
+#
+# 来源：vllm-ascend GLM-5.2《Prefill-Decode Disaggregation → Deployment on 8 Atlas 800 A2》
+#       + GLM-5.3 A2 多机共置脚本里的 A2 专属环境变量
+# 注意：上游明确写明 PD 分离尚未在 GLM-5.3 上验证，下面沿用 GLM-5.2 的 PD 实测参数。
+---
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: glm53-pd
+  namespace: glm
+spec:
+  model:
+    # PVC 直接只读挂到 /mnt/models，不走 storage-initializer
+    uri: pvc://glm53-weights/GLM-5.3-w8a8c8
+    name: glm-5
+
+  router:
+    gateway: {}
+    route: {}
+    # scheduler 非空 → KServe 建 InferencePool + EPP，并自动挂上
+    # kserve-config-llm-scheduler-eppconfig-default-pd（P/D 版打分插件）
+    scheduler: {}
+
+  # ============================== decode ==============================
+  replicas: 1
+  parallelism:
+    data: 8
+    dataLocal: 2
+    tensor: 4
+    expert: true
+
+  template:
+    containers:
+      - name: main
+        # A2 系列镜像（A3 用带 -a3 后缀的那个）
+        image: &ascendImage quay.io/ascend/vllm-ascend:v0.23.0
+        securityContext: &ascendSecurityContext
+          # CANN / driver 访问需要 root，覆盖 preset 里的 runAsNonRoot: true
+          runAsNonRoot: false
+          runAsUser: 0
+          allowPrivilegeEscalation: false
+          capabilities:
+            add: [IPC_LOCK, SYS_RAWIO, NET_RAW]
+        resources: &ascendResources
+          limits:
+            huawei.com/Ascend910: "8"
+            cpu: "96"
+            memory: 512Gi
+          requests:
+            huawei.com/Ascend910: "8"
+            cpu: "48"
+            memory: 256Gi
+        env: &decodeEnv
+          # ---- 多机通信：控制面走 Pod 网络，KV 走 NPU 侧 RoCE ----
+          - name: HCCL_IF_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: HCCL_SOCKET_IFNAME
+            value: eth0
+          - name: GLOO_SOCKET_IFNAME
+            value: eth0
+          - name: TP_SOCKET_IFNAME
+            value: eth0
+          - name: HCCL_OP_EXPANSION_MODE
+            value: AIV
+          - name: HCCL_INTRA_ROCE_ENABLE
+            value: "1"
+          - name: HCCL_BUFFSIZE
+            value: "2560"
+          # ---- A2 专属：算子初始化 / CPU 绑核 / 放宽超时 ----
+          - name: ACL_OP_INIT_MODE
+            value: "1"
+          - name: CPU_AFFINITY_CONF
+            value: "1"
+          - name: OMP_PROC_BIND
+            value: "false"
+          - name: OMP_NUM_THREADS
+            value: "10"
+          - name: VLLM_RPC_TIMEOUT
+            value: "360000"
+          - name: VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS
+            value: "30000"
+          - name: VLLM_ENGINE_READY_TIMEOUT_S
+            value: "1200"
+          - name: HCCL_EXEC_TIMEOUT
+            value: "200"
+          - name: HCCL_CONNECT_TIMEOUT
+            value: "120"
+          # ---- 通用 ----
+          - name: PYTORCH_NPU_ALLOC_CONF
+            value: expandable_segments:True
+          - name: PYTHONHASHSEED
+            value: "0"
+          # preset 默认起 8 个 API server 进程，GLM-5.3 参考脚本用 1
+          - name: VLLM_API_SERVER_COUNT
+            value: "1"
+          # preset 的启动脚本把这一段原样 eval 进 `vllm serve`。
+          # 只要这里出现 --kv-transfer-config，preset 就不会再注入默认的 NixlConnector。
+          # --tensor-parallel-size / --data-parallel-* / --enable-expert-parallel /
+          # --served-model-name / --port 由 preset 从 spec.parallelism 生成，不要在这里重复。
+          - name: VLLM_ADDITIONAL_ARGS
+            value: >-
+              --trust-remote-code
+              --seed 1024
+              --quantization ascend
+              --safetensors-load-strategy prefetch
+              --max-model-len 200000
+              --max-num-batched-tokens 256
+              --max-num-seqs 256
+              --gpu-memory-utilization 0.92
+              --enable-prefix-caching
+              --enable-auto-tool-choice
+              --tool-call-parser glm47
+              --reasoning-parser glm45
+              --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","cudagraph_capture_sizes":[4,8,16,24,32,40,48,56,64,96,128,160,192,224,256,298,320,352,384]}'
+              --additional-config '{"enable_flashcomm1":false,"enable_dsa_cp":false,"ascend_compilation_config":{"enable_npugraph_ex":true,"enable_static_kernel":false},"fuse_muls_add":true,"multistream_overlap_shared_expert":true,"enable_mc2_hierarchy_comm":false,"enable_sparse_sfa_c8":true,"enable_sparse_li_c8":true,"enable_cpu_binding":true,"recompute_scheduler_enable":true,"enable_mlapo":true}'
+              --speculative-config '{"num_speculative_tokens":3,"method":"deepseek_mtp","enforce_eager":true}'
+              --kv-transfer-config '{"kv_connector":"MooncakeConnectorV1","kv_role":"kv_consumer","kv_port":"30100","kv_connector_extra_config":{"prefill":{"dp_size":4,"tp_size":8},"decode":{"dp_size":8,"tp_size":4}}}'
+        volumeMounts: &ascendVolumeMounts
+          - name: ascend-driver-lib64
+            mountPath: /usr/local/Ascend/driver/lib64
+            readOnly: true
+          - name: ascend-driver-version
+            mountPath: /usr/local/Ascend/driver/version.info
+            readOnly: true
+          - name: ascend-hccn-tool
+            mountPath: /usr/local/Ascend/driver/tools/hccn_tool
+            readOnly: true
+          - name: ascend-hccn-conf
+            mountPath: /etc/hccn.conf
+            readOnly: true
+          - name: ascend-dcmi
+            mountPath: /usr/local/dcmi
+            readOnly: true
+          - name: ascend-npu-smi
+            mountPath: /usr/local/bin/npu-smi
+            readOnly: true
+          - name: ascend-install-info
+            mountPath: /etc/ascend_install.info
+            readOnly: true
+        # 只有 leader 起 API server。preset 默认 60×10s=10min，
+        # 多机 DP + 共享存储加载 w8a8c8 权重远不止 10 分钟，放宽到 60min。
+        startupProbe:
+          failureThreshold: 180
+          periodSeconds: 20
+          httpGet:
+            path: /health
+            port: 8001
+    volumes: &ascendVolumes
+      # 装了 ascend-docker-runtime 的集群可以整段删掉，由 runtime 自动注入
+      - name: ascend-driver-lib64
+        hostPath:
+          path: /usr/local/Ascend/driver/lib64
+          type: Directory
+      - name: ascend-driver-version
+        hostPath:
+          path: /usr/local/Ascend/driver/version.info
+          type: File
+      - name: ascend-hccn-tool
+        hostPath:
+          path: /usr/local/Ascend/driver/tools/hccn_tool
+          type: File
+      - name: ascend-hccn-conf
+        hostPath:
+          path: /etc/hccn.conf
+          type: File
+      - name: ascend-dcmi
+        hostPath:
+          path: /usr/local/dcmi
+          type: Directory
+      - name: ascend-npu-smi
+        hostPath:
+          path: /usr/local/bin/npu-smi
+          type: File
+      - name: ascend-install-info
+        hostPath:
+          path: /etc/ascend_install.info
+          type: File
+
+  # decode worker：除了不起 API server（没有探针）之外和 leader 完全一致，
+  # --headless / --data-parallel-start-rank 由 preset 负责
+  worker:
+    containers:
+      - name: main
+        image: *ascendImage
+        securityContext: *ascendSecurityContext
+        resources: *ascendResources
+        env: *decodeEnv
+        volumeMounts: *ascendVolumeMounts
+    volumes: *ascendVolumes
+
+  # ============================== prefill ==============================
+  prefill:
+    replicas: 1
+    parallelism:
+      data: 4
+      dataLocal: 1
+      tensor: 8
+      expert: true
+
+    template:
+      containers:
+        - name: main
+          image: *ascendImage
+          securityContext: *ascendSecurityContext
+          resources: *ascendResources
+          env: &prefillEnv
+            - name: HCCL_IF_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: HCCL_SOCKET_IFNAME
+              value: eth0
+            - name: GLOO_SOCKET_IFNAME
+              value: eth0
+            - name: TP_SOCKET_IFNAME
+              value: eth0
+            - name: HCCL_OP_EXPANSION_MODE
+              value: AIV
+            - name: HCCL_INTRA_ROCE_ENABLE
+              value: "1"
+            # prefill 侧 buffer 比 decode 小
+            - name: HCCL_BUFFSIZE
+              value: "256"
+            - name: ACL_OP_INIT_MODE
+              value: "1"
+            - name: CPU_AFFINITY_CONF
+              value: "1"
+            - name: OMP_PROC_BIND
+              value: "false"
+            - name: OMP_NUM_THREADS
+              value: "10"
+            - name: VLLM_RPC_TIMEOUT
+              value: "360000"
+            - name: VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS
+              value: "30000"
+            - name: VLLM_ENGINE_READY_TIMEOUT_S
+              value: "1200"
+            - name: HCCL_EXEC_TIMEOUT
+              value: "200"
+            - name: HCCL_CONNECT_TIMEOUT
+              value: "120"
+            - name: PYTORCH_NPU_ALLOC_CONF
+              value: expandable_segments:True
+            - name: PYTHONHASHSEED
+              value: "0"
+            - name: VLLM_API_SERVER_COUNT
+              value: "1"
+            - name: VLLM_ADDITIONAL_ARGS
+              value: >-
+                --trust-remote-code
+                --seed 1024
+                --quantization ascend
+                --safetensors-load-strategy prefetch
+                --max-model-len 200000
+                --max-num-batched-tokens 8192
+                --max-num-seqs 512
+                --gpu-memory-utilization 0.92
+                --enable-prefix-caching
+                --enable-chunked-prefill
+                --enforce-eager
+                --enable-auto-tool-choice
+                --tool-call-parser glm47
+                --reasoning-parser glm45
+                --additional-config '{"enable_flashcomm1":true,"enable_dsa_cp":true,"ascend_compilation_config":{"enable_npugraph_ex":true,"enable_static_kernel":false},"fuse_muls_add":true,"multistream_overlap_shared_expert":true,"enable_mc2_hierarchy_comm":false,"enable_sparse_sfa_c8":true,"enable_sparse_li_c8":true,"enable_cpu_binding":true,"recompute_scheduler_enable":false,"enable_mlapo":true}'
+                --speculative-config '{"num_speculative_tokens":1,"method":"deepseek_mtp","enforce_eager":true}'
+                --kv-transfer-config '{"kv_connector":"MooncakeConnectorV1","kv_role":"kv_producer","kv_port":"30000","kv_connector_extra_config":{"prefill":{"dp_size":4,"tp_size":8},"decode":{"dp_size":8,"tp_size":4}}}'
+          volumeMounts: *ascendVolumeMounts
+          startupProbe:
+            failureThreshold: 180
+            periodSeconds: 20
+            httpGet:
+              # prefill 的 vLLM 直接监听 8000；decode 侧 8000 被 routing sidecar 占着，
+              # vLLM 在 8001 —— 两边端口不同是 preset 的设计，不要对齐
+              path: /health
+              port: 8000
+      volumes: *ascendVolumes
+
+    worker:
+      containers:
+        - name: main
+          image: *ascendImage
+          securityContext: *ascendSecurityContext
+          resources: *ascendResources
+          env: *prefillEnv
+          volumeMounts: *ascendVolumeMounts
+      volumes: *ascendVolumes

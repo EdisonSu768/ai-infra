@@ -1,0 +1,24 @@
+# GLM-5.3-w8a8c8 权重 PVC。
+#
+# 权重来源：https://modelscope.cn/models/Eco-Tech/GLM-5.3-w8a8c8
+# llmisvc 用 `pvc://glm53-weights/GLM-5.3-w8a8c8` 直接只读挂载到 /mnt/models，
+# 不走 storage-initializer，所以 PVC 必须在部署前就已经填好权重。
+#
+# 要求：
+#   - accessModes 必须是 ReadWriteMany（prefill + decode 一共 8 个 Pod 同时读）
+#   - 底层用 NFS / CephFS / 并行文件系统，不要用 RWO 块存储
+#   - 目录结构：<pvc-root>/GLM-5.3-w8a8c8/{config.json,*.safetensors,...}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: glm53-weights
+  namespace: glm
+spec:
+  accessModes:
+    - ReadWriteMany
+  # 改成集群里的共享文件系统 StorageClass
+  storageClassName: nfs-shared
+  resources:
+    requests:
+      storage: 1Ti

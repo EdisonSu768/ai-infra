@@ -1,0 +1,288 @@
+# 补上 KServe 缺的那个 preset：kserve-config-llm-prefill-worker-pipeline-parallel
+#
+# 为什么需要自己写：
+#   llmisvc 的 API 是支持 pipeline parallel 的 —— `parallelism.pipeline` 字段存在，
+#   webhook 里甚至专门校验「pipeline 和 data 不能同时设」，控制器里也有分支：
+#       case Prefill.Worker != nil && Prefill.Parallelism.IsPipelineParallel():
+#           refs = append(refs, wr.Resolve(llmSvc, configPrefillWorkerPipelineParallelName))
+#   但对应的 LLMInferenceServiceConfig 对象至今没有随发行版发出来
+#   （config_merge.go 里还挂着 `// FIXME move those presets to well-known when they're finally known :)`，
+#   charts/kserve-runtime-configs 里也没有）。
+#   也就是说 PP 这条路 KServe 留了接口、没放实现 —— 这个文件就是那个实现。
+#
+# 名字解析是确定的：
+#   configPrefix("kserve-") + "config-llm-prefill-worker-pipeline-parallel"，
+#   而且因为它不在 WellKnownDefaultConfigs 集合里，
+#   WellKnownConfigResolver.Attach 不会给它打版本化别名，Resolve 原样返回这个名字。
+#   getConfig 的查找顺序是「LLMISVC 所在 namespace → kserve namespace」，
+#   所以放在业务 namespace 里就会被优先选中。
+#
+# ⚠ namespace 必须和 LLMInferenceService 一致。换 namespace 部署要跟着复制一份，
+#   或者改成 namespace: kserve 让全集群共用。
+#
+# ⚠ 这份脚手架（volumes / probes / ports / lifecycle / 版本探测）是照 v0.20.0 的
+#   kserve-config-llm-prefill-worker-data-parallel 抄的，只把 DP 那几个 flag 换成 PP。
+#   升级 KServe 大版本时对一下上游那份有没有变。
+#   等哪天 KServe 自己发了这个 preset，删掉本文件即可。
+#
+# 拓扑假设：TP == 单节点卡数，于是 nnodes == pipeline_size == LWS group size。
+# A3 上就是 TP16 / PP2 / 2 节点。
+---
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceServiceConfig
+metadata:
+  name: kserve-config-llm-prefill-worker-pipeline-parallel
+  namespace: glm
+spec:
+  prefill:
+    annotations:
+      serving.kserve.io/model-based-routing-enabled: "true"
+
+    # ---------------------------- leader (node-rank 0) ----------------------------
+    template:
+      containers:
+        - name: main
+          command:
+            - /bin/bash
+            - -c
+            - |-
+              # LWS_LEADER_ADDRESS 是 DNS 名，torch / mp executor 要的是可路由 IP
+              RESOLVE_ATTEMPTS=${MASTER_ADDR_RESOLVE_ATTEMPTS:-30}
+              for ((i=1; i<=RESOLVE_ATTEMPTS; i++)); do
+                MASTER_ADDR=$(getent hosts ${LWS_LEADER_ADDRESS} | cut -d' ' -f1)
+                if [ -n "$MASTER_ADDR" ]; then
+                  echo "MASTER_ADDR=${MASTER_ADDR} (resolved on attempt $i)"
+                  break
+                fi
+                echo "MASTER_ADDR resolution failed on attempt $i, retrying..."
+                sleep 1
+              done
+              if [ -z "$MASTER_ADDR" ]; then
+                echo "WARNING: falling back to LWS_LEADER_ADDRESS"
+                MASTER_ADDR=${LWS_LEADER_ADDRESS}
+              fi
+
+              # leader 恒为 PP stage 0
+              NODE_RANK=0
+
+              # --disable-access-log-for-endpoints 是 vLLM 0.16.0 才有的，沿用上游的版本探测
+              ACCESS_LOG_ARGS="--disable-uvicorn-access-log"
+              VLLM_VERSION=$(vllm --version 2>/dev/null | tail -1 | awk '{print $NF}')
+              echo "[access-log-detect] vllm version='${VLLM_VERSION}'"
+              if [[ "$VLLM_VERSION" =~ ^[0-9]+\.[0-9]+ ]] && [ "$(printf '%s\n%s\n' "0.16.0" "${VLLM_VERSION}" | sort -V | head -1)" = "0.16.0" ]; then
+                ACCESS_LOG_ARGS="--disable-access-log-for-endpoints /health,/metrics,/ping"
+              fi
+
+              # 上游 preset 在这里会「NIXL 装了就注入 NixlConnector，没装就静默关掉 KV 传输」。
+              # Ascend 镜像里没有 nixl，走静默分支的结果是 P/D 退化成 decode 端重算 —— 只有一行日志。
+              # 这里改成硬失败：PP prefill 必须自带 Mooncake。
+              if [[ "${VLLM_ADDITIONAL_ARGS:-}" != *"--kv-transfer-config"* ]] && [[ "${VLLM_ADDITIONAL_ARGS:-}" != *"--kv_transfer_config"* ]]; then
+                echo "FATAL: prefill requires an explicit --kv-transfer-config in VLLM_ADDITIONAL_ARGS" >&2
+                exit 1
+              fi
+
+              eval "exec vllm serve \
+                /mnt/models \
+                --served-model-name "{{ .Spec.Model.Name }}" "publishers/{{ .ObjectMeta.Namespace }}/models/{{ .Spec.Model.Name }}" \
+                --port 8000 \
+                --api-server-count ${VLLM_API_SERVER_COUNT:-1} \
+                {{- if .Spec.Prefill.Parallelism.Expert -}}--enable-expert-parallel{{- end }} \
+                --tensor-parallel-size {{ .Spec.Prefill.Parallelism.Tensor }} \
+                --pipeline-parallel-size {{ .Spec.Prefill.Parallelism.Pipeline }} \
+                --distributed-executor-backend mp \
+                --nnodes {{ .Spec.Prefill.Parallelism.Pipeline }} \
+                --node-rank ${NODE_RANK} \
+                --master-addr ${MASTER_ADDR} \
+                --master-port ${VLLM_PP_MASTER_PORT:-7060} \
+                ${ACCESS_LOG_ARGS} \
+                {{ if .GlobalConfig.EnableTLS }}--enable-ssl-refresh{{- end }} \
+                {{ if .GlobalConfig.EnableTLS }}--ssl-certfile /var/run/kserve/tls/tls.crt{{- end }} \
+                {{ if .GlobalConfig.EnableTLS }}--ssl-keyfile /var/run/kserve/tls/tls.key{{- end }} \
+                ${VLLM_ADDITIONAL_ARGS} \
+                $@"
+            - --
+          env:
+            - name: HOME
+              value: /home
+            - name: VLLM_LOGGING_LEVEL
+              value: INFO
+            - name: HF_HUB_CACHE
+              value: /models
+          imagePullPolicy: IfNotPresent
+          lifecycle:
+            preStop:
+              exec:
+                command: [/bin/sleep, "15"]
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          livenessProbe:
+            failureThreshold: 10
+            periodSeconds: 10
+            timeoutSeconds: 1
+            httpGet:
+              path: /health
+              port: 8000
+              scheme: '{{ if .GlobalConfig.EnableTLS }}HTTPS{{else}}HTTP{{- end }}'
+          readinessProbe:
+            failureThreshold: 2
+            periodSeconds: 1
+            timeoutSeconds: 1
+            httpGet:
+              path: /health
+              port: 8000
+              scheme: '{{ if .GlobalConfig.EnableTLS }}HTTPS{{else}}HTTP{{- end }}'
+          startupProbe:
+            failureThreshold: 60
+            periodSeconds: 10
+            httpGet:
+              path: /health
+              port: 8000
+              scheme: '{{ if .GlobalConfig.EnableTLS }}HTTPS{{else}}HTTP{{- end }}'
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: [IPC_LOCK, SYS_RAWIO, NET_RAW]
+              drop: [ALL]
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: FallbackToLogsOnError
+          volumeMounts:
+            - mountPath: /home
+              name: home
+            - mountPath: /tmp
+              name: tmp-dir
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /models
+              name: model-cache
+            - mountPath: /var/run/kserve/tls
+              name: tls-certs
+              readOnly: true
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - name: home
+          emptyDir: {}
+        - name: tmp-dir
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+        - name: model-cache
+          emptyDir: {}
+        - name: tls-certs
+          secret:
+            secretName: '{{ ChildName .ObjectMeta.Name `-kserve-self-signed-certs` }}'
+
+    # ------------------------- worker (node-rank 1..N-1) -------------------------
+    worker:
+      containers:
+        - name: main
+          command:
+            - /bin/bash
+            - -c
+            - |-
+              RESOLVE_ATTEMPTS=${MASTER_ADDR_RESOLVE_ATTEMPTS:-30}
+              for ((i=1; i<=RESOLVE_ATTEMPTS; i++)); do
+                MASTER_ADDR=$(getent hosts ${LWS_LEADER_ADDRESS} | cut -d' ' -f1)
+                if [ -n "$MASTER_ADDR" ]; then
+                  echo "MASTER_ADDR=${MASTER_ADDR} (resolved on attempt $i)"
+                  break
+                fi
+                echo "MASTER_ADDR resolution failed on attempt $i, retrying..."
+                sleep 1
+              done
+              if [ -z "$MASTER_ADDR" ]; then
+                echo "WARNING: falling back to LWS_LEADER_ADDRESS"
+                MASTER_ADDR=${LWS_LEADER_ADDRESS}
+              fi
+
+              # LWS 给 leader 发 0、worker 发 1..size-1，正好就是 PP stage 编号
+              NODE_RANK=${LWS_WORKER_INDEX:-0}
+              echo "NODE_RANK=${NODE_RANK}"
+
+              ACCESS_LOG_ARGS="--disable-uvicorn-access-log"
+              VLLM_VERSION=$(vllm --version 2>/dev/null | tail -1 | awk '{print $NF}')
+              if [[ "$VLLM_VERSION" =~ ^[0-9]+\.[0-9]+ ]] && [ "$(printf '%s\n%s\n' "0.16.0" "${VLLM_VERSION}" | sort -V | head -1)" = "0.16.0" ]; then
+                ACCESS_LOG_ARGS="--disable-access-log-for-endpoints /health,/metrics,/ping"
+              fi
+
+              if [[ "${VLLM_ADDITIONAL_ARGS:-}" != *"--kv-transfer-config"* ]] && [[ "${VLLM_ADDITIONAL_ARGS:-}" != *"--kv_transfer_config"* ]]; then
+                echo "FATAL: prefill requires an explicit --kv-transfer-config in VLLM_ADDITIONAL_ARGS" >&2
+                exit 1
+              fi
+
+              eval "exec vllm serve \
+                /mnt/models \
+                --served-model-name "{{ .Spec.Model.Name }}" "publishers/{{ .ObjectMeta.Namespace }}/models/{{ .Spec.Model.Name }}" \
+                --port 8000 \
+                {{- if .Spec.Prefill.Parallelism.Expert -}}--enable-expert-parallel{{- end }} \
+                --tensor-parallel-size {{ .Spec.Prefill.Parallelism.Tensor }} \
+                --pipeline-parallel-size {{ .Spec.Prefill.Parallelism.Pipeline }} \
+                --distributed-executor-backend mp \
+                --nnodes {{ .Spec.Prefill.Parallelism.Pipeline }} \
+                --node-rank ${NODE_RANK} \
+                --master-addr ${MASTER_ADDR} \
+                --master-port ${VLLM_PP_MASTER_PORT:-7060} \
+                --headless \
+                ${ACCESS_LOG_ARGS} \
+                {{ if .GlobalConfig.EnableTLS }}--enable-ssl-refresh{{- end }} \
+                {{ if .GlobalConfig.EnableTLS }}--ssl-certfile /var/run/kserve/tls/tls.crt{{- end }} \
+                {{ if .GlobalConfig.EnableTLS }}--ssl-keyfile /var/run/kserve/tls/tls.key{{- end }} \
+                ${VLLM_ADDITIONAL_ARGS} \
+                $@"
+            - --
+          env:
+            - name: HOME
+              value: /home
+            - name: VLLM_LOGGING_LEVEL
+              value: INFO
+            - name: HF_HUB_CACHE
+              value: /models
+          imagePullPolicy: IfNotPresent
+          # worker 是 --headless，不起 API server —— 不能加任何 HTTP 探针
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              add: [IPC_LOCK, SYS_RAWIO, NET_RAW]
+              drop: [ALL]
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: FallbackToLogsOnError
+          volumeMounts:
+            - mountPath: /home
+              name: home
+            - mountPath: /tmp
+              name: tmp-dir
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /models
+              name: model-cache
+            - mountPath: /var/run/kserve/tls
+              name: tls-certs
+              readOnly: true
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - name: home
+          emptyDir: {}
+        - name: tmp-dir
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+        - name: model-cache
+          emptyDir: {}
+        - name: tls-certs
+          secret:
+            secretName: '{{ ChildName .ObjectMeta.Name `-kserve-self-signed-certs` }}'

@@ -1,0 +1,2 @@
+- vllm-ascend
+- crd use llmisvc

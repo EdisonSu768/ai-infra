@@ -1,0 +1,2 @@
+- https://github.com/zai-org
+- https://github.com/zai-org/GLM-5/blob/main/example/ascend.md
