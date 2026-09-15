@@ -1,0 +1,30 @@
+{
+  "run_id": "glm53-pd-690b15a-pp2-20260915",
+  "platform": "a2",
+  "pid": 59129,
+  "commit": "690b15a5e3d20f2829813987cf53a3c5e3eb0ceb",
+  "source_snapshot": "/private/tmp/msmodeling-glm53-pp",
+  "local_patch_sha256": "19c8c42d637ca9874bf3024986bcd1834d48f67199c19ce79d3895c2be5fe1fc",
+  "python": "3.13.7 (main, Aug 18 2025, 19:02:43) [Clang 20.1.4 ]",
+  "packages": {
+    "torch": "2.10.0",
+    "transformers": "5.13.1",
+    "salabim": "26.0.6",
+    "numpy": "2.4.6"
+  },
+  "argv": [
+    "serving_cast.main",
+    "--instance_config_path=/Users/szg/Github/ai-infra/GLM-5.3-w8a8c8/glm53-pd-690b15a-pp2-20260915/a2/instances.yaml",
+    "--common_config_path=/Users/szg/Github/ai-infra/GLM-5.3-w8a8c8/glm53-pd-690b15a-pp2-20260915/a2/common.yaml",
+    "--output_json=/Users/szg/Github/ai-infra/GLM-5.3-w8a8c8/glm53-pd-690b15a-pp2-20260915/a2/result.json"
+  ],
+  "config_sha256": {
+    "common.yaml": "e86a2d64d332cfcde2cb475ebe6bbc1211cfad9bfefac801439f30a95c81526c",
+    "instances.yaml": "1d9d046cd7b2e132622de817e5439ec026d9d58aabf2fc7fd4401b396d4061c7"
+  },
+  "model_config_sha256": "22189a89ed44f45a195d069bdf7ff87de200a9fa4ba8915930c21f3a7038beed",
+  "started_at": "2026-09-15T09:19:11.529602+00:00",
+  "status": "completed",
+  "elapsed_seconds": 6526.2075812919065,
+  "finished_at": "2026-09-15T11:07:57.878548+00:00"
+}

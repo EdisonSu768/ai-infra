@@ -1,0 +1,100 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.7, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/szg/Github/msmodeling
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.13.0
+collected 3 items
+
+../../../Users/szg/Github/msmodeling/reports/glm53-pd-690b15a-pp2-20260915/test_glm5_pipeline_indexshare.py F [ 33%]
+FF                                                                       [100%]
+
+=================================== FAILURES ===================================
+_______ test_indexshare_crosses_pipeline_stage_without_recomputation[0] ________
+
+tmp_path = PosixPath('/private/var/folders/qd/d_n3z7s54jvcss93_tyndk7h0000gn/T/pytest-of-suzhenggang/pytest-6/test_indexshare_crosses_pipeli0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10ac62650>, mtp = 0
+
+    @pytest.mark.parametrize("mtp", [0, 1])
+    def test_indexshare_crosses_pipeline_stage_without_recomputation(tmp_path, monkeypatch, mtp):
+        fixture = Path(__file__).resolve().parents[2] / "assets/model_config/glm5/config.json"
+>       config = json.loads(fixture.read_text())
+                            ^^^^^^^^^^^^^^^^^^^
+
+/Users/szg/Github/msmodeling/reports/glm53-pd-690b15a-pp2-20260915/test_glm5_pipeline_indexshare.py:20: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Users/szg/.local/share/uv/python/cpython-3.13.7-macos-aarch64-none/lib/python3.13/pathlib/_local.py:546: in read_text
+    return PathBase.read_text(self, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/szg/.local/share/uv/python/cpython-3.13.7-macos-aarch64-none/lib/python3.13/pathlib/_abc.py:632: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/Users/szg/Github/msmodeling/assets/model_config/glm5/config.json')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/Users/szg/Github/msmodeling/assets/model_config/glm5/config.json'
+
+/Users/szg/.local/share/uv/python/cpython-3.13.7-macos-aarch64-none/lib/python3.13/pathlib/_local.py:537: FileNotFoundError
+_______ test_indexshare_crosses_pipeline_stage_without_recomputation[1] ________
+
+tmp_path = PosixPath('/private/var/folders/qd/d_n3z7s54jvcss93_tyndk7h0000gn/T/pytest-of-suzhenggang/pytest-6/test_indexshare_crosses_pipeli1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b95afd0>, mtp = 1
+
+    @pytest.mark.parametrize("mtp", [0, 1])
+    def test_indexshare_crosses_pipeline_stage_without_recomputation(tmp_path, monkeypatch, mtp):
+        fixture = Path(__file__).resolve().parents[2] / "assets/model_config/glm5/config.json"
+>       config = json.loads(fixture.read_text())
+                            ^^^^^^^^^^^^^^^^^^^
+
+/Users/szg/Github/msmodeling/reports/glm53-pd-690b15a-pp2-20260915/test_glm5_pipeline_indexshare.py:20: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Users/szg/.local/share/uv/python/cpython-3.13.7-macos-aarch64-none/lib/python3.13/pathlib/_local.py:546: in read_text
+    return PathBase.read_text(self, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/szg/.local/share/uv/python/cpython-3.13.7-macos-aarch64-none/lib/python3.13/pathlib/_abc.py:632: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/Users/szg/Github/msmodeling/assets/model_config/glm5/config.json')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/Users/szg/Github/msmodeling/assets/model_config/glm5/config.json'
+
+/Users/szg/.local/share/uv/python/cpython-3.13.7-macos-aarch64-none/lib/python3.13/pathlib/_local.py:537: FileNotFoundError
+_________ test_leading_shared_indexer_requires_explicit_pipeline_input _________
+
+    def test_leading_shared_indexer_requires_explicit_pipeline_input():
+        with pytest.raises(ValueError, match="no preceding full"):
+            resolve_glm5_indexer_source_layer(["shared", "full"], 0)
+>       assert resolve_glm5_indexer_source_layer(["shared", "full"], 0, allow_external_source=True) == -1
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: resolve_glm5_indexer_source_layer() got an unexpected keyword argument 'allow_external_source'
+
+/Users/szg/Github/msmodeling/reports/glm53-pd-690b15a-pp2-20260915/test_glm5_pipeline_indexshare.py:68: TypeError
+=========================== short test summary info ============================
+FAILED ../../../Users/szg/Github/msmodeling/reports/glm53-pd-690b15a-pp2-20260915/test_glm5_pipeline_indexshare.py::test_indexshare_crosses_pipeline_stage_without_recomputation[0]
+FAILED ../../../Users/szg/Github/msmodeling/reports/glm53-pd-690b15a-pp2-20260915/test_glm5_pipeline_indexshare.py::test_indexshare_crosses_pipeline_stage_without_recomputation[1]
+FAILED ../../../Users/szg/Github/msmodeling/reports/glm53-pd-690b15a-pp2-20260915/test_glm5_pipeline_indexshare.py::test_leading_shared_indexer_requires_explicit_pipeline_input
+============================== 3 failed in 3.53s ===============================

@@ -1,0 +1,28 @@
+model_config:
+  name: /Users/szg/Github/ai-infra/GLM-5.3-w8a8c8
+  num_mtp_tokens: 3
+  quantize_linear_action: W8A8_DYNAMIC
+  quantize_lmhead: false
+  mxfp4_group_size: 32
+  quantize_attention_action: DISABLED
+  do_compile: false
+  allow_graph_break: false
+  dump_input_shapes: false
+  chrome_trace: null
+  enable_multi_process: false
+  num_processes: 10
+  predict_steps: 5
+  enable_interpolate: false
+  interpolation_seed: 1234
+  enable_preprocessing_modeling: true
+  enable_kv_transfer_modeling: true
+load_gen:
+  load_gen_type: fixed_length
+  num_requests: 8
+  num_input_tokens: 3500
+  num_output_tokens: 1500
+  request_rate: 2.0
+serving_config:
+  max_concurrency: 4
+  block_size: 128
+  max_tokens_budget: 8192

@@ -1,0 +1,31 @@
+{
+  "run_id": "msmodeling-glm52-w4a8c8-20260915",
+  "pid": 93798,
+  "source_commit": "690b15a5e3d20f2829813987cf53a3c5e3eb0ceb",
+  "source_snapshot": "/private/tmp/msmodeling-glm52-w4a8c8-20260915/source",
+  "source_patch": "ServingCast ModelConfig + runner forward quantize_non_expert_linear_action (2 added lines)",
+  "config_bridge": "Convert YAML quantization strings to TensorCast enums before invoking main",
+  "python": "3.13.7 (main, Aug 18 2025, 19:02:43) [Clang 20.1.4 ]",
+  "packages": {
+    "torch": "2.10.0",
+    "transformers": "5.13.1",
+    "salabim": "26.0.6",
+    "numpy": "2.4.6"
+  },
+  "argv": [
+    "serving_cast.main",
+    "--instance_config_path=/private/tmp/msmodeling-glm52-w4a8c8-20260915/instances.yaml",
+    "--common_config_path=/private/tmp/msmodeling-glm52-w4a8c8-20260915/common.yaml",
+    "--output_json=/private/tmp/msmodeling-glm52-w4a8c8-20260915/result.json"
+  ],
+  "sha256": {
+    "common.yaml": "7b0d33a938212037a34c47a88bc8af63534c628bd19cf83215f51c1d4600617d",
+    "instances.yaml": "2f321c75d8c8d06251f2ffedd5d1687ae5d00eca1f755571deb8895d3af73e48",
+    "model/config.json": "30539810915d1de4fff5ba1605c46f64756b8904f2f67ef2a1a2a4987e82b134",
+    "run.py": "4801a5dc973f03efa48f96cf454041d110b42ad6a779b2570fb4e0f593bd84f0"
+  },
+  "started_at": "2026-09-15T11:56:51.482484+00:00",
+  "status": "completed",
+  "elapsed_seconds": 3235.4746131671127,
+  "finished_at": "2026-09-15T12:50:46.814486+00:00"
+}

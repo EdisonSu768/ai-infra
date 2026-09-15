@@ -1,0 +1,20 @@
+--- a/serving_cast/config.py
++++ b/serving_cast/config.py
+@@ -67,6 +67,7 @@
+     dump_input_shapes: bool = False
+     chrome_trace: str | None = None
+     quantize_linear_action: str = "W8A8_DYNAMIC"
++    quantize_non_expert_linear_action: str = "DISABLED"
+     quantize_lmhead: bool = False
+     mxfp4_group_size: int = 32
+     quantize_attention_action: str = "DISABLED"
+--- a/serving_cast/model_runner.py
++++ b/serving_cast/model_runner.py
+@@ -134,6 +134,7 @@
+                 dump_input_shapes=common_config.model_config.dump_input_shapes,
+                 chrome_trace=common_config.model_config.chrome_trace,
+                 quantize_linear_action=common_config.model_config.quantize_linear_action,
++                quantize_non_expert_linear_action=common_config.model_config.quantize_non_expert_linear_action,
+                 quantize_lmhead=common_config.model_config.quantize_lmhead,
+                 mxfp4_group_size=common_config.model_config.mxfp4_group_size,
+                 quantize_attention_action=common_config.model_config.quantize_attention_action,

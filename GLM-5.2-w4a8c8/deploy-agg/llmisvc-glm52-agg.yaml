@@ -1,0 +1,180 @@
+# GLM-5.2-w4a8c8 · Atlas 800 A2 × 2 · Aggregate deployment
+#
+# 资源假设：2 个节点，每个节点 8 × Ascend 910B3 64 GiB。
+# 拓扑：TP8 × DP2 × EP16；每个 LWS pod 占满一个节点的 8 张卡。
+# 权重：把 Eco-Tech/GLM-5.2-w4a8c8 放到 RWX PVC 的 GLM-5.2-w4a8c8/ 子目录。
+#
+# A2 的 MoE 通信在 EP16 且满足运行时 token 容量条件时选择 MC2；EP8 会回退
+# 到 ALLGATHER。因此本清单使用 DP2 + TP8，确保 expert-parallel group 为 EP16。
+# 这是部署模板，仍需在目标集群完成 Ready、推理、错误率和延迟验证。
+---
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: glm52-w4a8c8
+  namespace: glm
+spec:
+  model:
+    uri: pvc://glm52-weights/GLM-5.2-w4a8c8
+    name: glm-52
+
+  router:
+    gateway: {}
+    route: {}
+    scheduler: {}
+
+  # KServe creates two LWS pods. Each pod is one local DP rank with TP8.
+  replicas: 1
+  parallelism:
+    data: 2
+    dataLocal: 1
+    tensor: 8
+    expert: true
+
+  template:
+    containers:
+      - name: main
+        image: &ascendImage quay.io/ascend/vllm-ascend:v0.23.0
+        securityContext: &ascendSecurityContext
+          runAsNonRoot: false
+          runAsUser: 0
+          allowPrivilegeEscalation: false
+          capabilities:
+            add: [IPC_LOCK, SYS_RAWIO, NET_RAW]
+        resources: &ascendResources
+          limits:
+            huawei.com/Ascend910: "8"
+            cpu: "96"
+            memory: 512Gi
+          requests:
+            huawei.com/Ascend910: "8"
+            cpu: "48"
+            memory: 256Gi
+        env: &ascendEnv
+          - name: HCCL_IF_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: HCCL_SOCKET_IFNAME
+            value: eth0
+          - name: GLOO_SOCKET_IFNAME
+            value: eth0
+          - name: TP_SOCKET_IFNAME
+            value: eth0
+          - name: HCCL_OP_EXPANSION_MODE
+            value: AIV
+          - name: HCCL_INTRA_ROCE_ENABLE
+            value: "1"
+          - name: HCCL_BUFFSIZE
+            value: "256"
+          - name: ACL_OP_INIT_MODE
+            value: "1"
+          - name: CPU_AFFINITY_CONF
+            value: "1"
+          - name: OMP_PROC_BIND
+            value: "false"
+          - name: OMP_NUM_THREADS
+            value: "10"
+          - name: VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS
+            value: "3000"
+          - name: VLLM_ENGINE_READY_TIMEOUT_S
+            value: "1200"
+          - name: HCCL_EXEC_TIMEOUT
+            value: "200"
+          - name: HCCL_CONNECT_TIMEOUT
+            value: "120"
+          - name: PYTORCH_NPU_ALLOC_CONF
+            value: expandable_segments:True
+          - name: PYTHONHASHSEED
+            value: "0"
+          - name: VLLM_API_SERVER_COUNT
+            value: "1"
+          # KServe preset injects --data-parallel-* / --tensor-parallel-size /
+          # --enable-expert-parallel from spec.parallelism.
+          - name: VLLM_ADDITIONAL_ARGS
+            value: >-
+              --trust-remote-code
+              --seed 1024
+              --quantization ascend
+              --safetensors-load-strategy prefetch
+              --block-size 128
+              --enable-prefix-caching
+              --max-model-len 40000
+              --max-num-batched-tokens 4096
+              --max-num-seqs 16
+              --gpu-memory-utilization 0.95
+              --async-scheduling
+              --enable-auto-tool-choice
+              --tool-call-parser glm47
+              --reasoning-parser glm45
+              --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY"}'
+              --additional-config '{"multistream_overlap_shared_expert":true,"enable_prefill_mc2":true}'
+              --speculative-config '{"num_speculative_tokens":5,"method":"deepseek_mtp","enforce_eager":true}'
+        volumeMounts: &ascendVolumeMounts
+          - name: ascend-driver-lib64
+            mountPath: /usr/local/Ascend/driver/lib64
+            readOnly: true
+          - name: ascend-driver-version
+            mountPath: /usr/local/Ascend/driver/version.info
+            readOnly: true
+          - name: ascend-hccn-tool
+            mountPath: /usr/local/Ascend/driver/tools/hccn_tool
+            readOnly: true
+          - name: ascend-hccn-conf
+            mountPath: /etc/hccn.conf
+            readOnly: true
+          - name: ascend-dcmi
+            mountPath: /usr/local/dcmi
+            readOnly: true
+          - name: ascend-npu-smi
+            mountPath: /usr/local/bin/npu-smi
+            readOnly: true
+          - name: ascend-install-info
+            mountPath: /etc/ascend_install.info
+            readOnly: true
+        startupProbe:
+          failureThreshold: 180
+          periodSeconds: 20
+          httpGet:
+            path: /health
+            port: 8001
+    volumes: &ascendVolumes
+      - name: ascend-driver-lib64
+        hostPath:
+          path: /usr/local/Ascend/driver/lib64
+          type: Directory
+      - name: ascend-driver-version
+        hostPath:
+          path: /usr/local/Ascend/driver/version.info
+          type: File
+      - name: ascend-hccn-tool
+        hostPath:
+          path: /usr/local/Ascend/driver/tools/hccn_tool
+          type: File
+      - name: ascend-hccn-conf
+        hostPath:
+          path: /etc/hccn.conf
+          type: File
+      - name: ascend-dcmi
+        hostPath:
+          path: /usr/local/dcmi
+          type: Directory
+      - name: ascend-npu-smi
+        hostPath:
+          path: /usr/local/bin/npu-smi
+          type: File
+      - name: ascend-install-info
+        hostPath:
+          path: /etc/ascend_install.info
+          type: File
+
+  # Worker joins the same aggregate TP8 × DP2 engine and does not expose an API server.
+  worker:
+    containers:
+      - name: main
+        image: *ascendImage
+        securityContext: *ascendSecurityContext
+        resources: *ascendResources
+        env: *ascendEnv
+        volumeMounts: *ascendVolumeMounts
+    volumes: *ascendVolumes

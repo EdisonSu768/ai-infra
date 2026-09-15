@@ -1,0 +1,12 @@
+{
+  "status": "completed",
+  "wall_minutes": 54.2,
+  "simulated_seconds": 113.7,
+  "computed_batches": 1944,
+  "completed_requests": 8,
+  "memory_accounting_warnings": 1940,
+  "config_hashes_verified": true,
+  "request_and_token_counts_verified": true,
+  "ttft_identity_verified": true,
+  "throughput_identity_verified": true
+}

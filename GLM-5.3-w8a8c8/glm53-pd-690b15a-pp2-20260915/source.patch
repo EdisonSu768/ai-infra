@@ -1,0 +1,310 @@
+diff --git a/serving_cast/config.py b/serving_cast/config.py
+index 7bc94ce..91736b0 100644
+--- a/serving_cast/config.py
++++ b/serving_cast/config.py
+@@ -20,6 +20,8 @@ class ParallelConfig:
+     ep_size: int = 1
+     moe_tp_size: int = 1
+     moe_dp_size: int | None = None
++    pp_size: int = 1
++    pp_layer_partition: tuple[int, ...] | None = None
+ 
+ 
+ @dataclass
+diff --git a/serving_cast/model_runner.py b/serving_cast/model_runner.py
+index 2be7762..357d0d9 100644
+--- a/serving_cast/model_runner.py
++++ b/serving_cast/model_runner.py
+@@ -141,6 +141,8 @@ class ModelRunner:
+                 num_hidden_layers_override=0,
+                 world_size=parallel_config.world_size,
+                 tp_size=parallel_config.tp_size,
++                pp_size=parallel_config.pp_size,
++                pp_layer_partition=parallel_config.pp_layer_partition,
+                 dp_size=parallel_config.dp_size,
+                 mlp_tp_size=parallel_config.mlp_tp_size,
+                 mlp_dp_size=parallel_config.mlp_dp_size,
+diff --git a/tensor_cast/core/input_generator.py b/tensor_cast/core/input_generator.py
+index 71f9f62..5a8cba4 100644
+--- a/tensor_cast/core/input_generator.py
++++ b/tensor_cast/core/input_generator.py
+@@ -572,7 +572,14 @@ def _get_glm5_indexshare_indexer_types(model) -> list[str] | None:
+     glm5_config = _get_glm5_indexshare_config(model)
+     if glm5_config is None or not glm5_uses_indexshare(glm5_config):
+         return None
+-    return get_glm5_indexer_types(glm5_config)
++    indexer_types = get_glm5_indexer_types(glm5_config)
++    from ..pipeline_parallel import PipelineModel
++    from ..layers.glm5 import extend_glm5_indexer_types_for_mtp
++
++    if isinstance(model, PipelineModel) and model.model_config.mtp_config is not None:
++        indexer_types = list(indexer_types)
++        extend_glm5_indexer_types_for_mtp(indexer_types, model.model_config.mtp_config.num_mtp_layers)
++    return indexer_types
+ 
+ 
+ def _glm5_indexshare_layer_owns_indexer_cache(indexer_types: list[str] | None, layer_idx: int) -> bool:
+diff --git a/tensor_cast/layers/glm5.py b/tensor_cast/layers/glm5.py
+index 1c8281c..edd46bf 100644
+--- a/tensor_cast/layers/glm5.py
++++ b/tensor_cast/layers/glm5.py
+@@ -16,7 +16,9 @@ def glm5_uses_indexshare(config) -> bool:
+     return indexer_types is not None and _INDEXER_SHARED in indexer_types
+ 
+ 
+-def resolve_glm5_indexer_source_layer(indexer_types: list[str] | None, layer_idx: int) -> int:
++def resolve_glm5_indexer_source_layer(
++    indexer_types: list[str] | None, layer_idx: int, *, allow_external_source: bool = False
++) -> int:
+     if not indexer_types:
+         return layer_idx
+     if layer_idx >= len(indexer_types):
+@@ -38,19 +40,25 @@ def resolve_glm5_indexer_source_layer(indexer_types: list[str] | None, layer_idx
+             return source_idx
+         if indexer_types[source_idx] != _INDEXER_SHARED:
+             raise ValueError(f"Unsupported GLM5 indexer type '{indexer_types[source_idx]}' at layer {source_idx}")
++    if allow_external_source:
++        return -1  # The preceding PP stage supplies this run's top-k indices.
+     raise ValueError(f"GLM5 shared indexer layer {layer_idx} has no preceding full indexer layer")
+ 
+ 
+-def get_glm5_indexer_flow_flags(indexer_types: list[str] | None, layer_idx: int) -> tuple[bool, bool]:
++def get_glm5_indexer_flow_flags(
++    indexer_types: list[str] | None, layer_idx: int, *, allow_external_source: bool = False
++) -> tuple[bool, bool]:
+     if not indexer_types or _INDEXER_SHARED not in indexer_types:
+         return False, False
+ 
+-    source_layer_idx = resolve_glm5_indexer_source_layer(indexer_types, layer_idx)
++    source_layer_idx = resolve_glm5_indexer_source_layer(
++        indexer_types, layer_idx, allow_external_source=allow_external_source
++    )
+     skip_topk = source_layer_idx != layer_idx
+     next_layer_idx = layer_idx + 1
+     next_skip_topk = False
+     if next_layer_idx < len(indexer_types):
+-        resolve_glm5_indexer_source_layer(indexer_types, next_layer_idx)
++        resolve_glm5_indexer_source_layer(indexer_types, next_layer_idx, allow_external_source=allow_external_source)
+         next_skip_topk = indexer_types[next_layer_idx] == _INDEXER_SHARED
+     return skip_topk, next_skip_topk
+ 
+diff --git a/tensor_cast/model_config.py b/tensor_cast/model_config.py
+index 58e3fd3..7e4bfe3 100644
+--- a/tensor_cast/model_config.py
++++ b/tensor_cast/model_config.py
+@@ -612,6 +612,8 @@ class ModelConfig:
+     """Transformer models have repetitive patterns. This configuration flag tells TensorCast
+     whether to automatically detect and leverage the repetition patterns to reduce the
+     performance estimation cost. This is especially helpful for large models."""
++    pipeline_indexer_input: bool = False
++    pipeline_indexer_output: bool = False
+ 
+     def __post_init__(self):
+         # TODO: Use Pydantic to add data validation.
+diff --git a/tensor_cast/pipeline_parallel.py b/tensor_cast/pipeline_parallel.py
+index 76021e4..e199625 100644
+--- a/tensor_cast/pipeline_parallel.py
++++ b/tensor_cast/pipeline_parallel.py
+@@ -3,7 +3,7 @@
+ from __future__ import annotations
+ 
+ import copy
+-from dataclasses import dataclass, field
++from dataclasses import dataclass, field, replace
+ import json
+ import logging
+ from typing import Any, Optional
+@@ -372,6 +372,14 @@ def build_stage_model_config(model_config: ModelConfig, stage_spec: PipelineStag
+     """Derive a stage-local ModelConfig from the global model config."""
+     stage_config = copy.deepcopy(model_config)
+     text_config = stage_config.hf_config.get_text_config()
++    indexer_types = getattr(text_config, "indexer_types", None)
++    if getattr(text_config, "model_type", None) == "glm_moe_dsa" and isinstance(indexer_types, list):
++        stage_config.pipeline_indexer_input = (
++            not stage_spec.is_first and indexer_types[stage_spec.layer_start] == "shared"
++        )
++        stage_config.pipeline_indexer_output = (
++            not stage_spec.is_last and indexer_types[stage_spec.layer_end] == "shared"
++        )
+     _rebase_dense_prefix_policy(text_config, stage_spec)
+     _slice_hf_layer_metadata(text_config, stage_spec.layer_start, stage_spec.layer_end)
+     _rebase_attention_quant_config(stage_config.quant_config, stage_spec)
+@@ -712,12 +720,16 @@ class PipelineModel(torch.nn.Module):
+         """Execute all stage-local models serially and return final logits."""
+         hidden_states = None
+         logits = None
++        indexer_state = {}
+         for stage in self.stages:
+             stage_kwargs, _ = build_pipeline_stage_kwargs(
+                 stage.stage_spec,
+                 input_kwargs,
+                 hidden_states=hidden_states,
+             )
++            stage_config = stage.model.model_config
++            if stage_config.pipeline_indexer_input or stage_config.pipeline_indexer_output:
++                stage_kwargs["pipeline_indexer_state"] = indexer_state
+             stage_output = stage(**stage_kwargs)
+             if stage.stage_spec.is_last:
+                 logits = stage_output
+@@ -977,6 +989,7 @@ class PipelineCommunicator:
+         hidden_states: torch.Tensor,
+         *,
+         runtime_observer=None,
++        indexer_state: Optional[dict] = None,
+     ) -> _PipelineTransferRunResult:
+         """Transfer hidden states from this stage to the next PP stage."""
+         source_rank, target_rank = _stage_boundary_ranks(self.model_config.parallel_config, stage_spec.stage_id)
+@@ -989,7 +1002,6 @@ class PipelineCommunicator:
+             ) as runtime,
+             torch.no_grad(),
+         ):
+-            # PP currently transfers only the residual-applied hidden states.
+             output = torch.ops.tensor_cast.pipeline_send_recv(
+                 hidden_states,
+                 source_rank,
+@@ -997,8 +1009,22 @@ class PipelineCommunicator:
+                 stage_spec.stage_id,
+                 stage_spec.stage_id + 1,
+             )
++            topk_indices = indexer_state.get("topk_indices") if indexer_state is not None else None
++            if topk_indices is not None:
++                indexer_state["topk_indices"] = torch.ops.tensor_cast.pipeline_send_recv(
++                    topk_indices, source_rank, target_rank, stage_spec.stage_id, stage_spec.stage_id + 1
++                )
+ 
+         transfer_stats = self._build_transfer_stats_from_runtime(stage_spec, hidden_states, runtime)
++        if topk_indices is not None:
++            times = runtime.total_execution_time_s()
++            transfer_stats = replace(
++                transfer_stats,
++                payload_bytes=transfer_stats.payload_bytes + int(bytes_of_tensor(topk_indices)),
++                time_s=next(iter(times.values()), 0.0),
++                time_s_by_model=times,
++                latency_s=2 * transfer_stats.latency_s,
++            )
+ 
+         if runtime_observer is not None:
+             runtime_observer(runtime)
+@@ -1151,12 +1177,17 @@ class PipelineRunner:
+         hidden_states = None
+         logits = None
+ 
++        indexer_state = {}
+         for stage_runner in self.stage_runners:
+             stage_kwargs, cache_stats = build_pipeline_stage_kwargs(
+                 stage_runner.stage_spec,
+                 input_kwargs,
+                 hidden_states=hidden_states,
+             )
++            stage_config = stage_runner.stage.model.model_config
++            uses_indexer_state = stage_config.pipeline_indexer_input or stage_config.pipeline_indexer_output
++            if uses_indexer_state:
++                stage_kwargs["pipeline_indexer_state"] = indexer_state
+             stage_result = stage_runner.run(
+                 stage_kwargs,
+                 cache_stats=cache_stats,
+@@ -1174,6 +1205,7 @@ class PipelineRunner:
+                 stage_runner.stage_spec,
+                 stage_result.output,
+                 runtime_observer=runtime_observer,
++                **({"indexer_state": indexer_state} if uses_indexer_state else {}),
+             )
+             hidden_states = transfer_result.output
+             transfers.append(transfer_result)
+diff --git a/tensor_cast/transformers/builtin_model/glm5.py b/tensor_cast/transformers/builtin_model/glm5.py
+index b5e89ef..5b9c789 100644
+--- a/tensor_cast/transformers/builtin_model/glm5.py
++++ b/tensor_cast/transformers/builtin_model/glm5.py
+@@ -108,6 +108,7 @@ class Glm5ModelCompat(torch.nn.Module):
+         cache_position: torch.Tensor | None = None,
+         **kwargs,
+     ):
++        pipeline_indexer_state = kwargs.pop("pipeline_indexer_state", None)
+         if (input_ids is None) == (inputs_embeds is None):
+             raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
+ 
+@@ -126,18 +127,20 @@ class Glm5ModelCompat(torch.nn.Module):
+         if position_ids is None:
+             position_ids = cache_position.unsqueeze(0)
+ 
+-        causal_mask = create_causal_mask(
++        mask_kwargs = dict(
+             config=self._inner.config,
+             inputs_embeds=inputs_embeds,
+             attention_mask=attention_mask,
+-            cache_position=cache_position,
+             past_key_values=past_key_values,
+             position_ids=position_ids,
+         )
++        if "cache_position" in inspect.signature(create_causal_mask).parameters:
++            mask_kwargs["cache_position"] = cache_position
++        causal_mask = create_causal_mask(**mask_kwargs)
+ 
+         hidden_states = inputs_embeds
+         position_embeddings = self.rotary_emb(hidden_states, position_ids=position_ids)
+-        topk_indices = None
++        topk_indices = pipeline_indexer_state.get("topk_indices") if pipeline_indexer_state is not None else None
+         for decoder_layer in self._inner.layers[: self._inner.config.num_hidden_layers]:
+             hidden_states, topk_indices = decoder_layer(
+                 hidden_states,
+@@ -152,6 +155,8 @@ class Glm5ModelCompat(torch.nn.Module):
+             )
+ 
+         hidden_states = self._inner.norm(hidden_states)
++        if pipeline_indexer_state is not None:
++            pipeline_indexer_state["topk_indices"] = topk_indices
+         return BaseModelOutputWithPast(
+             last_hidden_state=hidden_states,
+             past_key_values=past_key_values,
+@@ -238,7 +243,11 @@ def patch_glm5_model(model) -> None:
+     needs_decoder_compat = (
+         hasattr(base_model, "layers")
+         and bool(base_model.layers)
+-        and not _decoder_supports_prev_topk(base_model.layers[0])
++        and (
++            not _decoder_supports_prev_topk(base_model.layers[0])
++            or model.model_config.pipeline_indexer_input
++            or model.model_config.pipeline_indexer_output
++        )
+     )
+ 
+     if needs_decoder_compat and not isinstance(base_model, Glm5ModelCompat):
+diff --git a/tensor_cast/transformers/transformations.py b/tensor_cast/transformers/transformations.py
+index fd35808..073781d 100644
+--- a/tensor_cast/transformers/transformations.py
++++ b/tensor_cast/transformers/transformations.py
+@@ -278,7 +278,11 @@ def maybe_reuse_layers(model: "ModelWrapperBase") -> "ModelWrapperBase":
+             skip_topk = getattr(self_attn, "skip_topk", False)
+             next_skip_topk = getattr(self_attn, "next_skip_topk", False)
+             if glm5_indexer_types is not None and isinstance(layer_idx, int):
+-                skip_topk, next_skip_topk = get_glm5_indexer_flow_flags(glm5_indexer_types, layer_idx)
++                skip_topk, next_skip_topk = get_glm5_indexer_flow_flags(
++                    glm5_indexer_types,
++                    layer_idx,
++                    allow_external_source=getattr(model.model_config, "pipeline_indexer_input", False),
++                )
+             if skip_topk or next_skip_topk:
+                 submodule_types.append(f"glm5_indexer_flow:{layer_idx if layer_idx is not None else id(module)}")
+         for name, sub_module in module.named_modules():
+@@ -608,9 +612,19 @@ def patch_mla(
+             if isinstance(mla, Glm5SparseAttention) and glm5_uses_indexshare(effective_hf_config):
+                 indexer_types = get_glm5_indexer_types(effective_hf_config)
+                 layer_idx = mla.layer_idx
+-                mla.indexer_source_layer_idx = resolve_glm5_indexer_source_layer(indexer_types, layer_idx)
++                mla.indexer_source_layer_idx = resolve_glm5_indexer_source_layer(
++                    indexer_types,
++                    layer_idx,
++                    allow_external_source=getattr(model.model_config, "pipeline_indexer_input", False),
++                )
+                 mla.indexer_type = indexer_types[layer_idx]
+-                mla.skip_topk, mla.next_skip_topk = get_glm5_indexer_flow_flags(indexer_types, layer_idx)
++                mla.skip_topk, mla.next_skip_topk = get_glm5_indexer_flow_flags(
++                    indexer_types,
++                    layer_idx,
++                    allow_external_source=getattr(model.model_config, "pipeline_indexer_input", False),
++                )
++                if layer_idx == getattr(model.model_config, "num_hidden_layers_override", 0) - 1:
++                    mla.next_skip_topk |= getattr(model.model_config, "pipeline_indexer_output", False)
+             old_type = type(module).__name__
+             model._replace_module(name, mla)
+             report.add_replacement(name, old_type, type(mla).__name__)

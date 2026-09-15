@@ -1,0 +1,38 @@
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+No op properties function defined for aten.arange.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.add.Tensor, assuming it is memory-bandwidth bound.
+No op properties function defined for aten._to_copy.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.pow.Tensor_Scalar, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.mean.dim, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.rsqrt.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.mul.Tensor, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.empty.memory_format, assuming it is memory-bandwidth bound.
+No op properties function defined for tensor_cast.dynamic_quantize_symmetric.default, assuming it is memory-bandwidth bound.
+No op properties function defined for tensor_cast.all_reduce.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.silu.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.sigmoid.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.topk.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.sum.dim_IntList, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.zeros_like.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.scatter_.value, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.bitwise_not.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.masked_fill.Scalar, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.gather.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.div_.Tensor, assuming it is memory-bandwidth bound.
+No op properties function defined for tensor_cast.moe_gating_top_k_softmax.default, assuming it is memory-bandwidth bound.
+No op properties function defined for tensor_cast.init_routing_v2.default, assuming it is memory-bandwidth bound.
+No op properties function defined for tensor_cast.all_to_all.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.cat.default, assuming it is memory-bandwidth bound.
+No op properties function defined for tensor_cast.unpermute_tokens.default, assuming it is memory-bandwidth bound.
+No op properties function defined for tensor_cast.all_gather.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.argmax.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.copy_.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.cos.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.sin.default, assuming it is memory-bandwidth bound.
+No op properties function defined for tensor_cast.shift_and_update_input_ids.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.empty_like.default, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.add_.Scalar, assuming it is memory-bandwidth bound.
+No op properties function defined for aten.constant_pad_nd.default, assuming it is memory-bandwidth bound.
+{"role": "prefill", "blocks": 5269, "block_size": 128, "time_s": {"analytic": 1.2075289676027787}, "stages": [{"stage_id": 0, "layer_start": 0, "layer_end": 41, "compute_time_s": {"analytic": 0.5847826899103}, "outgoing_comm_time_s": {"analytic": 0.0007624285714285715}, "total_time_s": {"analytic": 0.5855451184817286}}, {"stage_id": 1, "layer_start": 41, "layer_end": 78, "compute_time_s": {"analytic": 0.6219838491210503}, "outgoing_comm_time_s": {"analytic": 0.0}, "total_time_s": {"analytic": 0.6219838491210503}}], "indexer_calls": 26, "pp_transfer_calls": 2}
+Negative activation memory estimate (peak=37.282958 GB, weight=39.012765 GB, kv=0.487671 GB); this may indicate inconsistent peak memory, model weight, or cache accounting. Clamping activation to 0 and adjusting peak for consistency.
+{"role": "decode", "blocks": 1685, "block_size": 128, "time_s": {"analytic": 0.09471114470771565}, "stages": [], "indexer_calls": 26, "pp_transfer_calls": 0}
