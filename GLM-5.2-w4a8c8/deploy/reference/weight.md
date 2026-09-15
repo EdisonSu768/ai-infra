@@ -1,0 +1,1 @@
+- https://modelscope.cn/models/Eco-Tech/GLM-5.2-w4a8c8/
